@@ -30,16 +30,16 @@ export default function Login() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={submit}>
-        <h1>تسجيل الدخول</h1>
-        <label className="field"><span>البريد الإلكتروني</span>
-          <input type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+        <h1>Sign in</h1>
+        <label className="field"><span>Email</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         </label>
-        <label className="field"><span>كلمة المرور</span>
-          <input type="password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+        <label className="field"><span>Password</span>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
         </label>
         <Notice msg={error && { type: 'error', text: error }} />
-        <button className="btn primary block" disabled={busy}>{busy ? '…' : 'دخول'}</button>
-        <p className="muted center">طالب جديد؟ <Link to="/register">إنشاء حساب</Link></p>
+        <button className="btn primary block" disabled={busy}>{busy ? '…' : 'Sign in'}</button>
+        <p className="muted center">New student? <Link to="/register">Create an account</Link></p>
       </form>
     </div>
   );

@@ -30,7 +30,7 @@ export default function classRoutes(db) {
 
   r.get('/classes/:id', (req, res) => {
     const row = db.prepare(`${CLASS_SELECT} WHERE c.id = ?`).get(toId(req.params.id));
-    if (!row) throw notFound('الكلاس');
+    if (!row) throw notFound('Class');
     res.json({ class: row });
   });
 
@@ -40,7 +40,7 @@ export default function classRoutes(db) {
     const levelId = requireInt(req.body, 'level_id', { min: 1, optional: true });
     const coachId = requireInt(req.body, 'coach_id', { min: 1, optional: true });
     const capacity = requireInt(req.body, 'capacity', { min: 1, max: 200 });
-    if (coachId && !db.prepare('SELECT 1 FROM coaches WHERE user_id = ?').get(coachId)) throw badRequest('المدرب غير موجود');
+    if (coachId && !db.prepare('SELECT 1 FROM coaches WHERE user_id = ?').get(coachId)) throw badRequest('Coach not found');
     const info = db
       .prepare('INSERT INTO classes (name, sport_id, level_id, coach_id, capacity) VALUES (?, ?, ?, ?, ?)')
       .run(name, sportId, levelId, coachId, capacity);
@@ -50,7 +50,7 @@ export default function classRoutes(db) {
 
   r.patch('/classes/:id', requireRole('admin'), (req, res) => {
     const id = toId(req.params.id);
-    if (!db.prepare('SELECT 1 FROM classes WHERE id = ?').get(id)) throw notFound('الكلاس');
+    if (!db.prepare('SELECT 1 FROM classes WHERE id = ?').get(id)) throw notFound('Class');
     const name = requireString(req.body, 'name', { max: 120, optional: true });
     const coachId = requireInt(req.body, 'coach_id', { min: 1, optional: true });
     const capacity = requireInt(req.body, 'capacity', { min: 1, max: 200, optional: true });
@@ -69,11 +69,11 @@ export default function classRoutes(db) {
     const studentId = req.user.role === 'student' ? req.user.id : requireInt(req.body, 'student_id', { min: 1 });
     if (req.user.role === 'coach') throw forbidden();
     const cls = db.prepare('SELECT capacity, active, level_id FROM classes WHERE id = ?').get(classId);
-    if (!cls) throw notFound('الكلاس');
-    if (!cls.active) throw badRequest('هذا الكلاس غير متاح للتسجيل');
-    if (!db.prepare('SELECT 1 FROM students WHERE user_id = ?').get(studentId)) throw notFound('الطالب');
+    if (!cls) throw notFound('Class');
+    if (!cls.active) throw badRequest('This class is not open for enrollment');
+    if (!db.prepare('SELECT 1 FROM students WHERE user_id = ?').get(studentId)) throw notFound('Student');
     const count = db.prepare('SELECT COUNT(*) AS n FROM enrollments WHERE class_id = ?').get(classId).n;
-    if (count >= cls.capacity) throw new HttpError(409, 'الكلاس مكتمل');
+    if (count >= cls.capacity) throw new HttpError(409, 'Class is full');
     db.prepare('INSERT OR IGNORE INTO enrollments (class_id, student_id) VALUES (?, ?)').run(classId, studentId);
     audit(db, req.user.id, 'enroll', 'class', classId, { student_id: studentId });
     res.status(201).json({ ok: true, sessions_remaining: remainingSessions(db, studentId) });
@@ -114,7 +114,7 @@ export default function classRoutes(db) {
          FROM lessons l JOIN classes c ON c.id = l.class_id JOIN sports s ON s.id = c.sport_id WHERE l.id = ?`
       )
       .get(lessonId);
-    if (!row) throw notFound('الحصة');
+    if (!row) throw notFound('Lesson');
     if (req.user.role === 'student') {
       const enrolled = db.prepare('SELECT 1 FROM enrollments WHERE class_id = ? AND student_id = ?').get(row.class_id, req.user.id);
       if (!enrolled) throw forbidden();
@@ -135,7 +135,7 @@ export default function classRoutes(db) {
     if (!canManageClass(db, req.user, classId)) throw forbidden();
     const startsAt = requireDate(req.body, 'starts_at');
     const endsAt = requireDate(req.body, 'ends_at');
-    if (endsAt <= startsAt) throw badRequest('وقت النهاية يجب أن يكون بعد البداية');
+    if (endsAt <= startsAt) throw badRequest('End time must be after start time');
     const location = requireString(req.body, 'location', { max: 120, optional: true });
     const info = db
       .prepare('INSERT INTO lessons (class_id, starts_at, ends_at, location) VALUES (?, ?, ?, ?)')

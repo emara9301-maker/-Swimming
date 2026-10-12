@@ -33,7 +33,7 @@ export default function notificationRoutes(db) {
     const title = requireString(req.body, 'title', { max: 200 });
     const body = requireString(req.body, 'body', { max: 2000, optional: true });
     const role = req.body.role ? requireString(req.body, 'role', { max: 20 }) : null;
-    if (role && !['student', 'coach', 'admin'].includes(role)) throw notFound('الدور');
+    if (role && !['student', 'coach', 'admin'].includes(role)) throw notFound('Role');
     const users = role
       ? db.prepare('SELECT id FROM users WHERE role = ? AND active = 1').all(role)
       : db.prepare('SELECT id FROM users WHERE active = 1').all();

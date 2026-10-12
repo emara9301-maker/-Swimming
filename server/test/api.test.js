@@ -37,7 +37,7 @@ after(() => new Promise((resolve) => server.close(resolve)));
 
 test('student self-registers and logs in; wrong password is rejected', async () => {
   const reg = await api('POST', '/auth/register', {
-    body: { name: 'سارة', email: 'sara@test.dev', password: 'secret-pass-1', birth_date: '2015-04-01' },
+    body: { name: 'Sara', email: 'sara@test.dev', password: 'secret-pass-1', birth_date: '2015-04-01' },
   });
   assert.equal(reg.status, 201);
   assert.equal(reg.body.user.role, 'student');
@@ -58,21 +58,21 @@ test('unauthenticated and student requests to admin areas are refused', async ()
 test('admin creates a coach, a class, a lesson; student enrolls', async () => {
   const coach = await api('POST', '/admin/users', {
     as: 'admin',
-    body: { name: 'كابتن أحمد', email: 'coach@test.dev', password: 'coach-pass-1', role: 'coach', specialty: 'سباحة حرة' },
+    body: { name: 'Coach Ahmed', email: 'coach@test.dev', password: 'coach-pass-1', role: 'coach', specialty: 'Freestyle' },
   });
   assert.equal(coach.status, 201);
   tok.coach = (await api('POST', '/auth/login', { body: { email: 'coach@test.dev', password: 'coach-pass-1' } })).body.token;
 
   const cls = await api('POST', '/classes', {
     as: 'admin',
-    body: { name: 'أطفال المبتدئين', sport_id: 1, level_id: 1, coach_id: coach.body.id, capacity: 2 },
+    body: { name: 'Beginners Kids', sport_id: 1, level_id: 1, coach_id: coach.body.id, capacity: 2 },
   });
   assert.equal(cls.status, 201);
   tok.classId = cls.body.id;
 
   const lesson = await api('POST', `/classes/${cls.body.id}/lessons`, {
     as: 'coach',
-    body: { starts_at: '2026-11-01T17:00:00Z', ends_at: '2026-11-01T18:00:00Z', location: 'حمام 1' },
+    body: { starts_at: '2026-11-01T17:00:00Z', ends_at: '2026-11-01T18:00:00Z', location: 'Pool 1' },
   });
   assert.equal(lesson.status, 201);
   tok.lessonId = lesson.body.id;
@@ -87,7 +87,7 @@ test('attendance needs an active subscription session; present consumes one', as
   // Plan of 2 sessions, paid through the signed webhook.
   const price = await api('POST', '/prices', {
     as: 'admin',
-    body: { name: 'باقة 2 حصص', sessions_count: 2, validity_days: 30, amount_cents: 50000 },
+    body: { name: '2-session plan', sessions_count: 2, validity_days: 30, amount_cents: 50000 },
   });
   const buy = await api('POST', '/subscriptions', { as: 'student', body: { price_id: price.body.id } });
   assert.equal(buy.status, 201);
@@ -120,12 +120,12 @@ test('attendance needs an active subscription session; present consumes one', as
 test('coach sees only students of own classes; notes stay hidden from students', async () => {
   assert.equal((await api('GET', `/students/${tok.studentId}`, { as: 'coach' })).status, 200);
   const other = await api('POST', '/auth/register', {
-    body: { name: 'عمر', email: 'omar@test.dev', password: 'secret-pass-2' },
+    body: { name: 'Omar', email: 'omar@test.dev', password: 'secret-pass-2' },
   });
   const otherId = other.body.user.id;
   assert.equal((await api('GET', `/students/${otherId}`, { as: 'coach' })).status, 403);
 
-  const note = await api('POST', `/students/${tok.studentId}/notes`, { as: 'coach', body: { body: 'تحسن في التنفس' } });
+  const note = await api('POST', `/students/${tok.studentId}/notes`, { as: 'coach', body: { body: 'Improved breathing' } });
   assert.equal(note.status, 201);
   assert.equal((await api('GET', `/students/${tok.studentId}/notes`, { as: 'student' })).status, 403);
 });
@@ -136,7 +136,7 @@ test('level change is recorded and the student is notified', async () => {
   const progress = await api('GET', `/students/${tok.studentId}/progress`, { as: 'student' });
   assert.equal(progress.body.level_history.length, 1);
   const notes = await api('GET', '/notifications', { as: 'student' });
-  assert.ok(notes.body.items.some((n) => n.title.includes('ترقي')));
+  assert.ok(notes.body.items.some((n) => n.title.includes('promoted')));
 });
 
 test('evaluation rejects out-of-range scores; payment creates an invoice', async () => {

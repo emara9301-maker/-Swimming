@@ -1,8 +1,8 @@
 {
-  "name": "أكاديمية السباحة",
-  "short_name": "السباحة",
-  "lang": "ar",
-  "dir": "rtl",
+  "name": "Swimming Academy",
+  "short_name": "Swim Academy",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f7fb",

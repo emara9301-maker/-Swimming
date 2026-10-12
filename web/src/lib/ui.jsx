@@ -20,7 +20,7 @@ export function useAction() {
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   // Resolves with the result, or undefined when the action failed (the error is shown).
-  const run = async (fn, okText = 'تم الحفظ') => {
+  const run = async (fn, okText = 'Saved') => {
     setBusy(true);
     setMsg(null);
     try {
@@ -67,11 +67,11 @@ export function Stat({ label, value }) {
 
 export function Loading({ error }) {
   if (error) return <div className="notice error">{error}</div>;
-  return <p className="muted">جارٍ التحميل…</p>;
+  return <p className="muted">Loading…</p>;
 }
 
 // Column spec: [{ key, label, render? }]. Works as cards on phones via CSS.
-export function Table({ columns, rows, empty = 'لا توجد بيانات' }) {
+export function Table({ columns, rows, empty = 'No data yet' }) {
   if (!rows || rows.length === 0) return <p className="muted">{empty}</p>;
   return (
     <div className="table-wrap">
@@ -102,8 +102,8 @@ export function Field({ label, children }) {
   );
 }
 
-// Simple form: fields = [{ name, label, type?, options?, required?, optional? }].
-export function Form({ fields, submitLabel = 'حفظ', onSubmit, busy, initial = {} }) {
+// Simple form: fields = [{ name, label, type?, options?, required?, min?, max? }].
+export function Form({ fields, submitLabel = 'Save', onSubmit, busy, initial = {} }) {
   const [values, setValues] = useState(initial);
   const set = (name) => (e) => setValues((v) => ({ ...v, [name]: e.target.value }));
   return (
@@ -119,7 +119,7 @@ export function Form({ fields, submitLabel = 'حفظ', onSubmit, busy, initial =
         <Field key={f.name} label={f.label}>
           {f.options ? (
             <select value={values[f.name] ?? ''} onChange={set(f.name)} required={f.required}>
-              <option value="">— اختر —</option>
+              <option value="">— Select —</option>
               {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           ) : (
@@ -130,7 +130,6 @@ export function Form({ fields, submitLabel = 'حفظ', onSubmit, busy, initial =
               required={f.required}
               min={f.min}
               max={f.max}
-              dir={f.type === 'email' || f.type === 'password' || f.type === 'datetime-local' ? 'ltr' : undefined}
             />
           )}
         </Field>
@@ -160,8 +159,9 @@ export function Tabs({ tabs, value, onChange }) {
   );
 }
 
-export const fmtDate = (v) => (v ? new Date(v).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
-export const fmtMoney = (cents) => `${((cents || 0) / 100).toLocaleString('ar-EG')} ج.م`;
+export const fmtDate = (v) => (v ? new Date(v).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EGP' });
+export const fmtMoney = (cents) => money.format((cents || 0) / 100);
 export const toLocalInput = (d) => {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;

@@ -10,9 +10,9 @@ const pad = (n) => String(n).padStart(6, '0');
 // Runs in one transaction so a partial failure cannot charge without activating.
 function markPaid(db, paymentId, providerRef, actorId) {
   const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
-  if (!payment) throw notFound('الدفعة');
+  if (!payment) throw notFound('Payment');
   if (payment.status === 'paid') return payment;
-  if (payment.status !== 'pending') throw badRequest('لا يمكن تأكيد هذه الدفعة');
+  if (payment.status !== 'pending') throw badRequest('This payment cannot be confirmed');
 
   db.transaction(() => {
     db.prepare("UPDATE payments SET status = 'paid', paid_at = datetime('now'), provider_ref = COALESCE(?, provider_ref) WHERE id = ?")
@@ -27,7 +27,7 @@ function markPaid(db, paymentId, providerRef, actorId) {
       .run(paymentId, 'TMP', payment.amount_cents);
     db.prepare("UPDATE invoices SET number = ? WHERE id = ?")
       .run(`INV-${new Date().getFullYear()}-${pad(info.lastInsertRowid)}`, info.lastInsertRowid);
-    notify(db, payment.student_id, 'تم تأكيد الدفع', 'تم تفعيل اشتراكك بنجاح');
+    notify(db, payment.student_id, 'Payment confirmed', 'Your subscription is now active');
     audit(db, actorId, 'payment_paid', 'payment', paymentId, { provider_ref: providerRef });
   })();
   return db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
@@ -69,12 +69,12 @@ export default function billingRoutes(db) {
 
   function startSubscription(req, res, { studentId, priceId, method, confirm }) {
     if (req.user.role === 'coach') throw forbidden();
-    if (!['online', 'card', 'cash', 'transfer'].includes(method)) throw badRequest('طريقة الدفع غير صالحة');
-    if (method !== 'online' && req.user.role !== 'admin') throw badRequest('طريقة الدفع غير متاحة للطالب');
+    if (!['online', 'card', 'cash', 'transfer'].includes(method)) throw badRequest('Invalid payment method');
+    if (method !== 'online' && req.user.role !== 'admin') throw badRequest('This payment method is not available to students');
 
     const price = db.prepare('SELECT * FROM prices WHERE id = ? AND active = 1').get(priceId);
-    if (!price) throw notFound('الباقة');
-    if (!db.prepare('SELECT 1 FROM students WHERE user_id = ?').get(studentId)) throw notFound('الطالب');
+    if (!price) throw notFound('Plan');
+    if (!db.prepare('SELECT 1 FROM students WHERE user_id = ?').get(studentId)) throw notFound('Student');
 
     const result = db.transaction(() => {
       const sub = db.prepare(
@@ -108,7 +108,7 @@ export default function billingRoutes(db) {
   // Renewal: same plan as an existing subscription.
   r.post('/subscriptions/:id/renew', (req, res) => {
     const old = db.prepare('SELECT student_id, price_id FROM subscriptions WHERE id = ?').get(toId(req.params.id));
-    if (!old) throw notFound('الاشتراك');
+    if (!old) throw notFound('Subscription');
     if (req.user.role !== 'admin' && req.user.id !== old.student_id) throw forbidden();
     startSubscription(req, res, {
       studentId: old.student_id,
@@ -167,7 +167,7 @@ export default function billingRoutes(db) {
        JOIN prices pr ON pr.id = s.price_id
        WHERE p.id = ?`
     ).get(toId(req.params.paymentId, 'payment_id'));
-    if (!inv) throw notFound('الفاتورة');
+    if (!inv) throw notFound('Invoice');
     if (req.user.role !== 'admin' && req.user.id !== inv.student_id) throw forbidden();
     res.json({ invoice: inv });
   });
@@ -180,7 +180,7 @@ export function paymentWebhookRouter(db) {
   const r = express.Router();
   // Signed over the raw request body (captured in app.js).
   r.post('/payments/webhook', (req, res) => {
-    if (!verifyWebhook(req.rawBody || '', req.get('x-signature'))) throw new HttpError(401, 'توقيع غير صالح');
+    if (!verifyWebhook(req.rawBody || '', req.get('x-signature'))) throw new HttpError(401, 'Invalid signature');
     const paymentId = requireInt(req.body, 'payment_id', { min: 1 });
     const status = req.body.status;
     const providerRef = requireString(req.body, 'provider_ref', { max: 120, optional: true });

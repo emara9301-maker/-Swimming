@@ -35,10 +35,10 @@ export default function authRoutes(db) {
     const password = requireString(req.body, 'password', { max: 200 });
     const phone = requireString(req.body, 'phone', { max: 30, optional: true });
     const birthDate = requireDate(req.body, 'birth_date', { optional: true });
-    if (!EMAIL_RE.test(email)) throw badRequest('البريد الإلكتروني غير صالح');
-    if (password.length < 8) throw badRequest('كلمة المرور يجب ألا تقل عن 8 أحرف');
+    if (!EMAIL_RE.test(email)) throw badRequest('Invalid email address');
+    if (password.length < 8) throw badRequest('Password must be at least 8 characters');
     if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) {
-      throw new HttpError(409, 'البريد الإلكتروني مستخدم بالفعل');
+      throw new HttpError(409, 'Email is already in use');
     }
 
     const userId = db.transaction(() => {
@@ -62,7 +62,7 @@ export default function authRoutes(db) {
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     // Same error for unknown email and wrong password to avoid account enumeration.
     if (!user || !user.active || !verifyPassword(password, user.password_hash)) {
-      throw new HttpError(401, 'بيانات الدخول غير صحيحة');
+      throw new HttpError(401, 'Invalid email or password');
     }
     audit(db, user.id, 'login', 'user', user.id);
     res.json({ token: signToken(user), user: publicUser(db, user.id) });
@@ -79,8 +79,8 @@ export default function authRoutes(db) {
     const current = requireString(req.body, 'current_password', { max: 200, optional: true });
     if (newPassword) {
       const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
-      if (!current || !verifyPassword(current, row.password_hash)) throw badRequest('كلمة المرور الحالية غير صحيحة');
-      if (newPassword.length < 8) throw badRequest('كلمة المرور يجب ألا تقل عن 8 أحرف');
+      if (!current || !verifyPassword(current, row.password_hash)) throw badRequest('Current password is incorrect');
+      if (newPassword.length < 8) throw badRequest('Password must be at least 8 characters');
       db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), req.user.id);
     }
     db.prepare('UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone) WHERE id = ?').run(

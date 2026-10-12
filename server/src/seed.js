@@ -6,20 +6,20 @@ export function seedBasics(db) {
   const levelCount = db.prepare('SELECT COUNT(*) AS n FROM levels').get().n;
   if (levelCount === 0) {
     const insert = db.prepare('INSERT INTO levels (name, sort_order) VALUES (?, ?)');
-    ['مبتدئ', 'متوسط', 'متقدم', 'محترف'].forEach((name, i) => insert.run(name, i));
+    ['Beginner', 'Intermediate', 'Advanced', 'Pro'].forEach((name, i) => insert.run(name, i));
   }
 
   if (db.prepare('SELECT COUNT(*) AS n FROM sports').get().n === 0) {
-    const sportId = Number(db.prepare('INSERT INTO sports (name) VALUES (?)').run('سباحة').lastInsertRowid);
-    const beginner = db.prepare("SELECT id FROM levels WHERE name = 'مبتدئ'").get().id;
+    const sportId = Number(db.prepare('INSERT INTO sports (name) VALUES (?)').run('Swimming').lastInsertRowid);
+    const beginner = db.prepare("SELECT id FROM levels WHERE name = 'Beginner'").get().id;
     const addSkill = db.prepare('INSERT INTO skills (sport_id, level_id, name) VALUES (?, ?, ?)');
-    ['التنفس تحت الماء', 'الطفو على الظهر', 'حركة الرجلين', 'حركة الذراعين الحرة'].forEach((name) =>
+    ['Underwater breathing', 'Backstroke float', 'Leg kick', 'Freestyle arm stroke'].forEach((name) =>
       addSkill.run(sportId, beginner, name)
     );
   }
 }
 
-export function ensureAdmin(db, { email, password, name = 'مدير الأكاديمية' }) {
+export function ensureAdmin(db, { email, password, name = 'Academy Admin' }) {
   if (!email || !password) return false;
   if (db.prepare("SELECT 1 FROM users WHERE role = 'admin'").get()) return false;
   db.prepare("INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')")

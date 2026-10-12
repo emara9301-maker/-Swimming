@@ -34,15 +34,15 @@ export default function Register() {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={submit}>
-        <h1>إنشاء حساب طالب</h1>
-        <label className="field"><span>الاسم</span><input value={form.name} onChange={set('name')} required /></label>
-        <label className="field"><span>البريد الإلكتروني</span><input type="email" dir="ltr" value={form.email} onChange={set('email')} required /></label>
-        <label className="field"><span>كلمة المرور (8 أحرف على الأقل)</span><input type="password" dir="ltr" minLength={8} value={form.password} onChange={set('password')} required /></label>
-        <label className="field"><span>رقم الموبايل (اختياري)</span><input type="tel" dir="ltr" value={form.phone} onChange={set('phone')} /></label>
-        <label className="field"><span>تاريخ الميلاد (اختياري)</span><input type="date" dir="ltr" value={form.birth_date} onChange={set('birth_date')} /></label>
+        <h1>Create a student account</h1>
+        <label className="field"><span>Full name</span><input value={form.name} onChange={set('name')} required /></label>
+        <label className="field"><span>Email</span><input type="email" value={form.email} onChange={set('email')} required /></label>
+        <label className="field"><span>Password (at least 8 characters)</span><input type="password" minLength={8} value={form.password} onChange={set('password')} required /></label>
+        <label className="field"><span>Mobile number (optional)</span><input type="tel" value={form.phone} onChange={set('phone')} /></label>
+        <label className="field"><span>Date of birth (optional)</span><input type="date" value={form.birth_date} onChange={set('birth_date')} /></label>
         <Notice msg={error && { type: 'error', text: error }} />
-        <button className="btn primary block" disabled={busy}>{busy ? '…' : 'إنشاء الحساب'}</button>
-        <p className="muted center">لديك حساب؟ <Link to="/login">تسجيل الدخول</Link></p>
+        <button className="btn primary block" disabled={busy}>{busy ? '…' : 'Create account'}</button>
+        <p className="muted center">Already have an account? <Link to="/login">Sign in</Link></p>
       </form>
     </div>
   );

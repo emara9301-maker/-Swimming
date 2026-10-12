@@ -3,25 +3,26 @@ import { Link, useParams } from 'react-router-dom';
 import { get, post, put } from '../lib/api.js';
 import { useData, useAction, Card, Stat, Table, Form, Notice, Loading, fmtDate } from '../lib/ui.jsx';
 
-const ATTENDANCE_LABELS = { present: 'حاضر', absent: 'غائب', late: 'متأخر', excused: 'بعذر' };
+const ATTENDANCE_LABELS = { present: 'Present', absent: 'Absent', late: 'Late', excused: 'Excused' };
+const SUB_STATUS = { active: 'Active', pending: 'Pending', expired: 'Expired', cancelled: 'Cancelled' };
 
 // Coach's own lessons (admins see all lessons).
 export function CoachSchedule() {
   const lessons = useData(() => get(`/schedule?from=${new Date(Date.now() - 2 * 864e5).toISOString()}&to=${new Date(Date.now() + 14 * 864e5).toISOString()}`));
   return (
-    <Card title="جدول حصصي">
+    <Card title="My lessons">
       {lessons.error ? <Loading error={lessons.error} /> : (
         <Table
           rows={lessons.data?.items}
           columns={[
-            { key: 'starts_at', label: 'البداية', render: (r) => fmtDate(r.starts_at) },
-            { key: 'class_name', label: 'الكلاس' },
-            { key: 'sport_name', label: 'الرياضة' },
-            { key: 'level_name', label: 'المستوى' },
-            { key: 'location', label: 'المكان' },
-            { key: 'act', label: '', render: (r) => <Link className="btn ghost" to={`/coach/lessons/${r.id}`}>الحضور</Link> },
+            { key: 'starts_at', label: 'Starts', render: (r) => fmtDate(r.starts_at) },
+            { key: 'class_name', label: 'Class' },
+            { key: 'sport_name', label: 'Sport' },
+            { key: 'level_name', label: 'Level' },
+            { key: 'location', label: 'Location' },
+            { key: 'act', label: '', render: (r) => <Link className="btn ghost" to={`/coach/lessons/${r.id}`}>Attendance</Link> },
           ]}
-          empty="لا توجد حصص في الفترة القادمة"
+          empty="No lessons in the next two weeks"
         />
       )}
     </Card>
@@ -42,9 +43,9 @@ export function LessonPage() {
   const statusOf = (row) => draft[row.student_id] ?? row.status ?? 'absent';
   const save = async () => {
     const records = roster.data.items.map((row) => ({ student_id: row.student_id, status: statusOf(row) }));
-    const res = await run(() => put(`/lessons/${id}/attendance`, { records }), 'تم حفظ الحضور');
+    const res = await run(() => put(`/lessons/${id}/attendance`, { records }), 'Attendance saved');
     if (res?.students_without_sessions?.length) {
-      setMsg({ type: 'error', text: 'بعض الطلاب لا تتبقى لهم حصص، وتم إرسال تنبيه لهم' });
+      setMsg({ type: 'error', text: 'Some students have no sessions left. They have been notified.' });
     }
     setDraft({});
     roster.reload();
@@ -56,13 +57,13 @@ export function LessonPage() {
         <Notice msg={msg} />
         <div className="table-wrap">
           <table>
-            <thead><tr><th>الطالب</th><th>الحالة</th><th></th></tr></thead>
+            <thead><tr><th>Student</th><th>Status</th><th></th></tr></thead>
             <tbody>
               {roster.data.items.map((row) => (
                 <tr key={row.student_id}>
-                  <td data-label="الطالب">{row.name}</td>
-                  <td data-label="الحالة">
-                    <div className="segmented" role="radiogroup" aria-label={`حضور ${row.name}`}>
+                  <td data-label="Student">{row.name}</td>
+                  <td data-label="Status">
+                    <div className="segmented" role="radiogroup" aria-label={`Attendance for ${row.name}`}>
                       {Object.entries(ATTENDANCE_LABELS).map(([value, label]) => (
                         <button
                           key={value}
@@ -78,16 +79,16 @@ export function LessonPage() {
                     </div>
                   </td>
                   <td data-label="">
-                    <Link className="btn ghost" to={`/coach/students/${row.student_id}`}>ملف الطالب</Link>
+                    <Link className="btn ghost" to={`/coach/students/${row.student_id}`}>Student file</Link>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {roster.data.items.length === 0 && <p className="muted">لا يوجد طلاب مسجلون في هذا الكلاس</p>}
+        {roster.data.items.length === 0 && <p className="muted">No students enrolled in this class</p>}
         <div className="form-submit">
-          <button className="btn primary" disabled={busy || roster.data.items.length === 0} onClick={save}>حفظ الحضور</button>
+          <button className="btn primary" disabled={busy || roster.data.items.length === 0} onClick={save}>Save attendance</button>
         </div>
       </Card>
     </div>
@@ -117,81 +118,81 @@ export function CoachStudent() {
       <Card title={s.name} className="span-2">
         <Notice msg={msg} />
         <div className="stats">
-          <Stat label="المستوى" value={s.level_name} />
-          <Stat label="حصص متبقية" value={s.sessions_remaining} />
-          <Stat label="نسبة الحضور" value={progress.data?.attendance.rate != null ? `${progress.data.attendance.rate}%` : '—'} />
-          <Stat label="متوسط التقييم" value={progress.data?.evaluations.average} />
+          <Stat label="Level" value={s.level_name} />
+          <Stat label="Sessions left" value={s.sessions_remaining} />
+          <Stat label="Attendance" value={progress.data?.attendance.rate != null ? `${progress.data.attendance.rate}%` : '—'} />
+          <Stat label="Avg. rating" value={progress.data?.evaluations.average} />
         </div>
-        <p className="muted">الهاتف: <span dir="ltr">{s.phone || '—'}</span> · الاشتراكات: {student.data.subscriptions.length}</p>
+        <p className="muted">Phone: {s.phone || '—'} · Subscriptions: {student.data.subscriptions.length}</p>
       </Card>
 
-      <Card title="تقييم الطالب">
+      <Card title="Evaluate student">
         <Form
           fields={[
-            { name: 'score', label: 'التقييم (1-5)', type: 'number', min: 1, max: 5, required: true },
-            { name: 'comment', label: 'ملاحظة' },
+            { name: 'score', label: 'Rating (1–5)', type: 'number', min: 1, max: 5, required: true },
+            { name: 'comment', label: 'Comment' },
           ]}
-          submitLabel="حفظ التقييم"
+          submitLabel="Save rating"
           busy={busy}
-          onSubmit={(v) => run(() => post(`/students/${id}/evaluations`, { score: Number(v.score), comment: v.comment || undefined }), 'تم حفظ التقييم').then((r) => { if (r) refreshAll(); return !!r; })}
+          onSubmit={(v) => run(() => post(`/students/${id}/evaluations`, { score: Number(v.score), comment: v.comment || undefined }), 'Rating saved').then((r) => { if (r) refreshAll(); return !!r; })}
         />
         <Table rows={evals.data?.items} columns={[
-          { key: 'created_at', label: 'التاريخ', render: (r) => fmtDate(r.created_at) },
-          { key: 'score', label: 'التقييم' },
-          { key: 'comment', label: 'ملاحظة' },
-        ]} empty="لا توجد تقييمات بعد" />
+          { key: 'created_at', label: 'Date', render: (r) => fmtDate(r.created_at) },
+          { key: 'score', label: 'Rating' },
+          { key: 'comment', label: 'Comment' },
+        ]} empty="No ratings yet" />
       </Card>
 
-      <Card title="تسجيل مهارة تم تعلمها">
+      <Card title="Record a skill learned">
         <div className="inline-form">
           <select value={skillId} onChange={(e) => setSkillId(e.target.value)}>
-            <option value="">— اختر المهارة —</option>
+            <option value="">— Select skill —</option>
             {skills.data?.items.map((k) => <option key={k.id} value={k.id}>{k.sport_name} · {k.name}</option>)}
           </select>
-          <button className="btn primary" disabled={!skillId || busy} onClick={() => run(() => post(`/students/${id}/skills`, { skill_id: Number(skillId) }), 'تم تسجيل المهارة').then((r) => { if (r) { setSkillId(''); refreshAll(); } })}>تسجيل</button>
+          <button className="btn primary" disabled={!skillId || busy} onClick={() => run(() => post(`/students/${id}/skills`, { skill_id: Number(skillId) }), 'Skill recorded').then((r) => { if (r) { setSkillId(''); refreshAll(); } })}>Record</button>
         </div>
         <ul className="chips">{progress.data?.skills.map((k) => <li key={k.id}>{k.name}</li>)}</ul>
       </Card>
 
-      <Card title="تغيير المستوى">
+      <Card title="Change level">
         <div className="inline-form">
           <select value={level} onChange={(e) => setLevel(e.target.value)}>
-            <option value="">— اختر المستوى —</option>
+            <option value="">— Select level —</option>
             {levels.data?.items.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
-          <button className="btn primary" disabled={!level || busy} onClick={() => run(() => post(`/students/${id}/level`, { level_id: Number(level) }), 'تم تحديث المستوى').then((r) => { if (r) refreshAll(); })}>تحديث</button>
+          <button className="btn primary" disabled={!level || busy} onClick={() => run(() => post(`/students/${id}/level`, { level_id: Number(level) }), 'Level updated').then((r) => { if (r) refreshAll(); })}>Update</button>
         </div>
         <Table rows={progress.data?.level_history} columns={[
-          { key: 'changed_at', label: 'التاريخ', render: (r) => fmtDate(r.changed_at) },
-          { key: 'from_level', label: 'من' },
-          { key: 'to_level', label: 'إلى' },
-        ]} empty="لا يوجد سجل ترقية" />
+          { key: 'changed_at', label: 'Date', render: (r) => fmtDate(r.changed_at) },
+          { key: 'from_level', label: 'From' },
+          { key: 'to_level', label: 'To' },
+        ]} empty="No level history yet" />
       </Card>
 
-      <Card title="ملاحظات المدرب (خاصة)">
+      <Card title="Coach notes (private)">
         <Form
-          fields={[{ name: 'body', label: 'ملاحظة جديدة', required: true }]}
-          submitLabel="إضافة"
+          fields={[{ name: 'body', label: 'New note', required: true }]}
+          submitLabel="Add note"
           busy={busy}
-          onSubmit={(v) => run(() => post(`/students/${id}/notes`, { body: v.body }), 'تمت إضافة الملاحظة').then((r) => { if (r) refreshAll(); return !!r; })}
+          onSubmit={(v) => run(() => post(`/students/${id}/notes`, { body: v.body }), 'Note added').then((r) => { if (r) refreshAll(); return !!r; })}
         />
         <ul className="list">
           {notes.data?.items.map((n) => <li key={n.id}><span>{n.body}</span><small className="muted">{n.coach_name} · {fmtDate(n.created_at)}</small></li>)}
         </ul>
       </Card>
 
-      <Card title="سجل الحضور">
+      <Card title="Subscriptions">
         <Table rows={student.data.subscriptions} columns={[
-          { key: 'plan_name', label: 'الباقة' },
-          { key: 'status', label: 'الحالة' },
-          { key: 'used', label: 'المستخدم', render: (r) => `${r.sessions_used}/${r.sessions_total}` },
-        ]} empty="لا توجد اشتراكات" />
+          { key: 'plan_name', label: 'Plan' },
+          { key: 'status', label: 'Status', render: (r) => SUB_STATUS[r.status] },
+          { key: 'used', label: 'Used', render: (r) => `${r.sessions_used}/${r.sessions_total}` },
+        ]} empty="No subscriptions" />
       </Card>
     </div>
   );
 }
 
-// Attendance report for one of the coach's classes.
+// Attendance report for one class.
 export function CoachReports() {
   const classes = useData(() => get('/classes?limit=200'));
   const [classId, setClassId] = useState('');
@@ -201,25 +202,25 @@ export function CoachReports() {
     [classId, range.from, range.to]
   );
   return (
-    <Card title="تقرير الحضور والتقدم">
+    <Card title="Attendance report">
       <div className="inline-form wrap">
-        <select value={classId} onChange={(e) => setClassId(e.target.value)}>
-          <option value="">— اختر الكلاس —</option>
+        <select value={classId} onChange={(e) => setClassId(e.target.value)} aria-label="Class">
+          <option value="">— Select class —</option>
           {classes.data?.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <input type="date" dir="ltr" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} aria-label="من" />
-        <input type="date" dir="ltr" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} aria-label="إلى" />
+        <input type="date" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} aria-label="From" />
+        <input type="date" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} aria-label="To" />
       </div>
       <Table
         rows={report.data?.items}
-        empty="اختر كلاساً لعرض التقرير"
+        empty="Select a class to see its report"
         columns={[
-          { key: 'name', label: 'الطالب', render: (r) => <Link to={`/coach/students/${r.student_id}`}>{r.name}</Link> },
-          { key: 'lessons_recorded', label: 'حصص مسجلة' },
-          { key: 'present', label: 'حاضر' },
-          { key: 'late', label: 'متأخر' },
-          { key: 'absent', label: 'غائب' },
-          { key: 'excused', label: 'بعذر' },
+          { key: 'name', label: 'Student', render: (r) => <Link to={`/coach/students/${r.student_id}`}>{r.name}</Link> },
+          { key: 'lessons_recorded', label: 'Lessons recorded' },
+          { key: 'present', label: 'Present' },
+          { key: 'late', label: 'Late' },
+          { key: 'absent', label: 'Absent' },
+          { key: 'excused', label: 'Excused' },
         ]}
       />
     </Card>

@@ -55,7 +55,7 @@ export default function adminRoutes(db) {
     let where = '';
     if (req.query.role) {
       const role = requireString(req.query, 'role', { max: 20 });
-      if (!ROLES.includes(role)) throw badRequest('الدور غير صالح');
+      if (!ROLES.includes(role)) throw badRequest('Invalid role');
       where = 'WHERE role = ?';
       args.push(role);
     }
@@ -72,10 +72,10 @@ export default function adminRoutes(db) {
     const password = requireString(req.body, 'password', { max: 200 });
     const role = requireString(req.body, 'role', { max: 20 });
     const phone = requireString(req.body, 'phone', { max: 30, optional: true });
-    if (!['coach', 'admin'].includes(role)) throw badRequest('الدور يجب أن يكون coach أو admin');
-    if (!EMAIL_RE.test(email)) throw badRequest('البريد الإلكتروني غير صالح');
-    if (password.length < 8) throw badRequest('كلمة المرور يجب ألا تقل عن 8 أحرف');
-    if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'البريد مستخدم بالفعل');
+    if (!['coach', 'admin'].includes(role)) throw badRequest('Role must be coach or admin');
+    if (!EMAIL_RE.test(email)) throw badRequest('Invalid email address');
+    if (password.length < 8) throw badRequest('Password must be at least 8 characters');
+    if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) throw new HttpError(409, 'Email is already in use');
 
     const id = db.transaction(() => {
       const info = db.prepare('INSERT INTO users (name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)')
@@ -97,12 +97,12 @@ export default function adminRoutes(db) {
   r.patch('/admin/users/:id', (req, res) => {
     const id = toId(req.params.id);
     if (id === req.user.id && (req.body.active === false || req.body.role)) {
-      throw badRequest('لا يمكنك تعديل صلاحياتك أو تعطيل حسابك بنفسك');
+      throw badRequest('You cannot change your own role or deactivate your own account');
     }
     const user = db.prepare('SELECT role FROM users WHERE id = ?').get(id);
-    if (!user) throw notFound('المستخدم');
+    if (!user) throw notFound('User');
     if (req.body.role !== undefined) {
-      if (!ROLES.includes(req.body.role)) throw badRequest('الدور غير صالح');
+      if (!ROLES.includes(req.body.role)) throw badRequest('Invalid role');
       db.transaction(() => {
         db.prepare('UPDATE users SET role = ? WHERE id = ?').run(req.body.role, id);
         if (req.body.role === 'coach') db.prepare('INSERT OR IGNORE INTO coaches (user_id) VALUES (?)').run(id);
@@ -120,7 +120,7 @@ export default function adminRoutes(db) {
     const id = toId(req.params.id);
     const specialty = requireString(req.body, 'specialty', { max: 120, optional: true });
     const bio = requireString(req.body, 'bio', { max: 2000, optional: true });
-    if (!db.prepare('SELECT 1 FROM coaches WHERE user_id = ?').get(id)) throw notFound('المدرب');
+    if (!db.prepare('SELECT 1 FROM coaches WHERE user_id = ?').get(id)) throw notFound('Coach');
     db.prepare('UPDATE coaches SET specialty = COALESCE(?, specialty), bio = COALESCE(?, bio) WHERE user_id = ?')
       .run(specialty, bio, id);
     audit(db, req.user.id, 'update', 'coach', id);
@@ -165,7 +165,7 @@ export default function adminRoutes(db) {
     const info = db.prepare(
       'UPDATE content SET title = COALESCE(?, title), body = COALESCE(?, body), published = COALESCE(?, published) WHERE id = ?'
     ).run(title, body, published, id);
-    if (info.changes === 0) throw notFound('المحتوى');
+    if (info.changes === 0) throw notFound('Content');
     audit(db, req.user.id, 'update', 'content', id);
     res.json({ ok: true });
   });

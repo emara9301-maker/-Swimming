@@ -37,7 +37,7 @@ export default function studentRoutes(db) {
          LEFT JOIN levels l ON l.id = st.level_id WHERE st.user_id = ?`
       )
       .get(id);
-    if (!profile) throw notFound('الطالب');
+    if (!profile) throw notFound('Student');
     const subscriptions = db
       .prepare(
         `SELECT s.id, s.status, s.sessions_total, s.sessions_used, s.starts_at, s.ends_at, p.name AS plan_name
@@ -52,7 +52,7 @@ export default function studentRoutes(db) {
   r.patch('/students/:id', (req, res) => {
     const id = toId(req.params.id);
     if (req.user.role !== 'admin' && req.user.id !== id) throw forbidden();
-    if (!db.prepare('SELECT 1 FROM students WHERE user_id = ?').get(id)) throw notFound('الطالب');
+    if (!db.prepare('SELECT 1 FROM students WHERE user_id = ?').get(id)) throw notFound('Student');
     const name = requireString(req.body, 'name', { max: 120, optional: true });
     const phone = requireString(req.body, 'phone', { max: 30, optional: true });
     const birth = requireDate(req.body, 'birth_date', { optional: true });
@@ -69,16 +69,16 @@ export default function studentRoutes(db) {
     if (!canViewStudent(db, req.user, id)) throw forbidden();
     const levelId = requireInt(req.body, 'level_id', { min: 1 });
     const student = db.prepare('SELECT level_id FROM students WHERE user_id = ?').get(id);
-    if (!student) throw notFound('الطالب');
-    if (!db.prepare('SELECT 1 FROM levels WHERE id = ?').get(levelId)) throw notFound('المستوى');
-    if (student.level_id === levelId) throw badRequest('الطالب موجود بالفعل في هذا المستوى');
+    if (!student) throw notFound('Student');
+    if (!db.prepare('SELECT 1 FROM levels WHERE id = ?').get(levelId)) throw notFound('Level');
+    if (student.level_id === levelId) throw badRequest('Student is already at this level');
     db.transaction(() => {
       db.prepare('UPDATE students SET level_id = ? WHERE user_id = ?').run(levelId, id);
       db.prepare('INSERT INTO level_history (student_id, from_level_id, to_level_id, changed_by) VALUES (?, ?, ?, ?)')
         .run(id, student.level_id, levelId, req.user.id);
     })();
     const level = db.prepare('SELECT name FROM levels WHERE id = ?').get(levelId);
-    notify(db, id, 'تمت ترقيتك لمستوى جديد', `مستواك الآن: ${level.name}`);
+    notify(db, id, 'You have been promoted to a new level', `Your level is now: ${level.name}`);
     audit(db, req.user.id, 'level_change', 'student', id, { to: levelId });
     res.json({ ok: true });
   });

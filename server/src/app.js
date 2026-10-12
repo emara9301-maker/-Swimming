@@ -51,7 +51,7 @@ export function createApp(db, { webDistDir } = {}) {
   );
   app.use('/api', adminRoutes(db));
 
-  app.use('/api', (req, res) => res.status(404).json({ error: 'المسار غير موجود' }));
+  app.use('/api', (req, res) => res.status(404).json({ error: 'Route not found' }));
 
   if (webDistDir && fs.existsSync(webDistDir)) {
     app.use(express.static(webDistDir));
@@ -62,13 +62,13 @@ export function createApp(db, { webDistDir } = {}) {
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
-    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'JSON غير صالح' });
-    if (err.status === 413) return res.status(413).json({ error: 'البيانات كبيرة جداً' });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON' });
+    if (err.status === 413) return res.status(413).json({ error: 'Payload too large' });
     if (err.code === 'ERR_SQLITE_CONSTRAINT' || /constraint failed/i.test(err.message || '')) {
-      return res.status(409).json({ error: 'البيانات تتعارض مع سجل موجود' });
+      return res.status(409).json({ error: 'The data conflicts with an existing record' });
     }
     console.error(`[error] ${req.method} ${req.originalUrl}`, err);
-    res.status(500).json({ error: 'حدث خطأ داخلي' });
+    res.status(500).json({ error: 'Internal server error' });
   });
 
   return app;

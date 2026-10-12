@@ -50,9 +50,9 @@ export function authenticate(db) {
   return (req, res, next) => {
     const match = /^Bearer (.+)$/.exec(req.headers.authorization || '');
     const claims = match && verifyToken(match[1]);
-    if (!claims) return next(new HttpError(401, 'يجب تسجيل الدخول'));
+    if (!claims) return next(new HttpError(401, 'Please log in'));
     const user = findUser.get(claims.sub);
-    if (!user || !user.active) return next(new HttpError(401, 'الحساب غير متاح'));
+    if (!user || !user.active) return next(new HttpError(401, 'Account is not available'));
     req.user = { id: user.id, name: user.name, email: user.email, role: user.role };
     next();
   };

@@ -22,7 +22,7 @@ export default function progressRoutes(db) {
     const studentId = toId(req.params.id);
     if (!canViewStudent(db, req.user, studentId)) throw forbidden();
     const skillId = requireInt(req.body, 'skill_id', { min: 1 });
-    if (!db.prepare('SELECT 1 FROM skills WHERE id = ?').get(skillId)) throw notFound('المهارة');
+    if (!db.prepare('SELECT 1 FROM skills WHERE id = ?').get(skillId)) throw notFound('Skill');
     db.prepare(
       `INSERT INTO student_skills (student_id, skill_id, coach_id) VALUES (?, ?, ?)
        ON CONFLICT(student_id, skill_id) DO NOTHING`
@@ -77,7 +77,7 @@ export default function progressRoutes(db) {
     const studentId = toId(req.params.id);
     if (!canViewStudent(db, req.user, studentId)) throw forbidden();
     const body = requireString(req.body, 'body', { max: 5000 });
-    if (!body) throw badRequest('الملاحظة فارغة');
+    if (!body) throw badRequest('Note is empty');
     const info = db
       .prepare('INSERT INTO coach_notes (student_id, coach_id, body) VALUES (?, ?, ?)')
       .run(studentId, req.user.id, body);

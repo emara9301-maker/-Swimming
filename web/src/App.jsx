@@ -9,25 +9,25 @@ import { AdminDashboard, AdminUsers, AdminClasses, AdminBilling, AdminContent, A
 
 const NAV = {
   student: [
-    { to: '/student', label: 'الرئيسية', end: true },
-    { to: '/student/schedule', label: 'الجدول' },
-    { to: '/student/progress', label: 'تقدمي' },
-    { to: '/student/billing', label: 'الاشتراك' },
-    { to: '/student/profile', label: 'حسابي' },
-    { to: '/notifications', label: 'الإشعارات' },
+    { to: '/student', label: 'Home', end: true },
+    { to: '/student/schedule', label: 'Schedule' },
+    { to: '/student/progress', label: 'Progress' },
+    { to: '/student/billing', label: 'Billing' },
+    { to: '/student/profile', label: 'Profile' },
+    { to: '/notifications', label: 'Alerts' },
   ],
   coach: [
-    { to: '/coach', label: 'حصصي', end: true },
-    { to: '/coach/reports', label: 'التقارير' },
-    { to: '/notifications', label: 'الإشعارات' },
+    { to: '/coach', label: 'My Lessons', end: true },
+    { to: '/coach/reports', label: 'Reports' },
+    { to: '/notifications', label: 'Alerts' },
   ],
   admin: [
-    { to: '/admin', label: 'لوحة التحكم', end: true },
-    { to: '/admin/users', label: 'المستخدمون' },
-    { to: '/admin/classes', label: 'الكلاسات' },
-    { to: '/admin/billing', label: 'المالية' },
-    { to: '/admin/content', label: 'المحتوى' },
-    { to: '/admin/system', label: 'النظام' },
+    { to: '/admin', label: 'Dashboard', end: true },
+    { to: '/admin/users', label: 'Users' },
+    { to: '/admin/classes', label: 'Classes' },
+    { to: '/admin/billing', label: 'Billing' },
+    { to: '/admin/content', label: 'Content' },
+    { to: '/admin/system', label: 'System' },
   ],
 };
 
@@ -40,17 +40,17 @@ function Shell({ children }) {
   return (
     <div className="app">
       <header className="topbar">
-        <strong className="brand">أكاديمية السباحة</strong>
-        <nav className="desktop-nav">
+        <strong className="brand">Swimming Academy</strong>
+        <nav className="desktop-nav" aria-label="Main">
           {links.map((l) => <NavLink key={l.to} to={l.to} end={l.end}>{l.label}</NavLink>)}
         </nav>
         <div className="top-user">
           <span className="muted hide-sm">{user.name}</span>
-          <button className="btn ghost" onClick={() => { logout(); navigate('/login'); }}>خروج</button>
+          <button className="btn ghost" onClick={() => { logout(); navigate('/login'); }}>Sign out</button>
         </div>
       </header>
       <main className="content">{children}</main>
-      <nav className="bottom-nav" aria-label="القائمة الرئيسية">
+      <nav className="bottom-nav" aria-label="Main">
         {links.map((l) => <NavLink key={l.to} to={l.to} end={l.end}>{l.label}</NavLink>)}
       </nav>
     </div>
@@ -59,7 +59,7 @@ function Shell({ children }) {
 
 function RequireAuth({ roles, children }) {
   const { user, ready } = useAuth();
-  if (!ready) return <p className="muted center">جارٍ التحميل…</p>;
+  if (!ready) return <p className="muted center">Loading…</p>;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={HOME[user.role]} replace />;
   return <Shell>{children}</Shell>;
@@ -92,7 +92,7 @@ export default function App() {
       <Route path="/admin/content" element={<RequireAuth roles={['admin']}><AdminContent /></RequireAuth>} />
       <Route path="/admin/system" element={<RequireAuth roles={['admin']}><AdminSystem /></RequireAuth>} />
 
-      <Route path="*" element={<p className="center">الصفحة غير موجودة</p>} />
+      <Route path="*" element={<p className="center">Page not found</p>} />
     </Routes>
   );
 }

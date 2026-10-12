@@ -6,13 +6,13 @@ export class HttpError extends Error {
 }
 
 export const badRequest = (msg) => new HttpError(400, msg);
-export const forbidden = () => new HttpError(403, 'ليس لديك صلاحية لهذا الإجراء');
-export const notFound = (what = 'العنصر') => new HttpError(404, `${what} غير موجود`);
+export const forbidden = () => new HttpError(403, 'You do not have permission for this action');
+export const notFound = (what = 'Item') => new HttpError(404, `${what} not found`);
 
 // Returns a positive integer from a route param or body field, or throws 400.
 export function toId(value, name = 'id') {
   const n = Number(value);
-  if (!Number.isInteger(n) || n <= 0) throw badRequest(`${name} غير صالح`);
+  if (!Number.isInteger(n) || n <= 0) throw badRequest(`Invalid ${name}`);
   return n;
 }
 
@@ -20,9 +20,9 @@ export function requireString(body, field, { max = 255, optional = false } = {})
   const v = body?.[field];
   if (v === undefined || v === null || v === '') {
     if (optional) return null;
-    throw badRequest(`الحقل ${field} مطلوب`);
+    throw badRequest(`Field ${field} is required`);
   }
-  if (typeof v !== 'string' || v.trim().length > max) throw badRequest(`الحقل ${field} غير صالح`);
+  if (typeof v !== 'string' || v.trim().length > max) throw badRequest(`Field ${field} is invalid`);
   return v.trim();
 }
 
@@ -30,9 +30,9 @@ export function requireInt(body, field, { min = 0, max = Number.MAX_SAFE_INTEGER
   const v = body?.[field];
   if (v === undefined || v === null || v === '') {
     if (optional) return null;
-    throw badRequest(`الحقل ${field} مطلوب`);
+    throw badRequest(`Field ${field} is required`);
   }
-  if (!Number.isInteger(v) || v < min || v > max) throw badRequest(`الحقل ${field} خارج النطاق المسموح`);
+  if (!Number.isInteger(v) || v < min || v > max) throw badRequest(`Field ${field} is out of the allowed range`);
   return v;
 }
 
@@ -40,10 +40,10 @@ export function requireDate(body, field, { optional = false } = {}) {
   const v = body?.[field];
   if (v === undefined || v === null || v === '') {
     if (optional) return null;
-    throw badRequest(`الحقل ${field} مطلوب`);
+    throw badRequest(`Field ${field} is required`);
   }
   const d = new Date(v);
-  if (Number.isNaN(d.getTime())) throw badRequest(`تاريخ ${field} غير صالح`);
+  if (Number.isNaN(d.getTime())) throw badRequest(`Invalid date for ${field}`);
   return d.toISOString();
 }
 

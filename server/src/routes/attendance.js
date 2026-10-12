@@ -14,7 +14,7 @@ export default function attendanceRoutes(db) {
     const lessonId = toId(req.params.id);
     if (!canManageLesson(db, req.user, lessonId)) throw forbidden();
     const lesson = db.prepare('SELECT class_id FROM lessons WHERE id = ?').get(lessonId);
-    if (!lesson) throw notFound('الحصة');
+    if (!lesson) throw notFound('Lesson');
     const rows = db
       .prepare(
         `SELECT u.id AS student_id, u.name, a.status
@@ -33,10 +33,10 @@ export default function attendanceRoutes(db) {
     const lessonId = toId(req.params.id);
     if (!canManageLesson(db, req.user, lessonId)) throw forbidden();
     const lesson = db.prepare('SELECT class_id FROM lessons WHERE id = ?').get(lessonId);
-    if (!lesson) throw notFound('الحصة');
+    if (!lesson) throw notFound('Lesson');
     const records = req.body?.records;
     if (!Array.isArray(records) || records.length === 0 || records.length > 500) {
-      throw badRequest('records يجب أن تكون قائمة غير فارغة');
+      throw badRequest('records must be a non-empty list');
     }
 
     const enrolled = new Set(
@@ -63,8 +63,8 @@ export default function attendanceRoutes(db) {
       for (const rec of records) {
         const studentId = requireInt(rec, 'student_id', { min: 1 });
         const status = rec.status;
-        if (!STATUSES.includes(status)) throw badRequest('حالة الحضور غير صالحة');
-        if (!enrolled.has(studentId)) throw badRequest(`الطالب ${studentId} غير مسجل في هذا الكلاس`);
+        if (!STATUSES.includes(status)) throw badRequest('Invalid attendance status');
+        if (!enrolled.has(studentId)) throw badRequest(`Student ${studentId} is not enrolled in this class`);
 
         const prev = findExisting.get(lessonId, studentId);
         let subId = prev?.subscription_id ?? null;
@@ -80,7 +80,7 @@ export default function attendanceRoutes(db) {
             subId = sub.id;
           } else {
             warnings.push(studentId);
-            notify(db, studentId, 'لا توجد حصص متبقية', 'يرجى تجديد الاشتراك لمتابعة الحصص');
+            notify(db, studentId, 'No sessions remaining', 'Please renew your subscription to continue attending classes');
           }
         }
         upsert.run(lessonId, studentId, status, subId, req.user.id);
