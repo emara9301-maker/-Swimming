@@ -10,6 +10,7 @@ import attendanceRoutes from './routes/attendance.js';
 import progressRoutes from './routes/progress.js';
 import billingRoutes, { paymentWebhookRouter } from './routes/billing.js';
 import notificationRoutes from './routes/notifications.js';
+import bookingRoutes, { publicBookingRouter } from './routes/bookings.js';
 import adminRoutes from './routes/admin.js';
 import { HttpError } from './http.js';
 
@@ -36,6 +37,7 @@ export function createApp(db, { webDistDir } = {}) {
   app.get('/api/health', (req, res) => res.json({ ok: true }));
   app.use('/api/auth', authRoutes(db));
   app.use('/api', paymentWebhookRouter(db));
+  app.use('/api', publicBookingRouter(db));
 
   // Authenticated routers. Order matters only for the admin router, which
   // applies admin-only middleware to everything that reaches it, so it goes last.
@@ -47,7 +49,8 @@ export function createApp(db, { webDistDir } = {}) {
     attendanceRoutes(db),
     progressRoutes(db),
     billingRoutes(db),
-    notificationRoutes(db)
+    notificationRoutes(db),
+    bookingRoutes(db)
   );
   app.use('/api', adminRoutes(db));
 

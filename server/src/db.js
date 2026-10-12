@@ -166,6 +166,35 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   meta TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS training_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  venue TEXT NOT NULL,
+  starts_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL,
+  capacity INTEGER NOT NULL CHECK (capacity > 0),
+  coach_id INTEGER REFERENCES coaches(user_id) ON DELETE SET NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  CHECK (ends_at > starts_at)
+);
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES students(user_id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('public','private')),
+  status TEXT NOT NULL CHECK (status IN ('pending','confirmed','cancelled')),
+  training_session_id INTEGER REFERENCES training_sessions(id) ON DELETE SET NULL,
+  venue_address TEXT,
+  preferred_times TEXT,
+  contact_phone TEXT,
+  notes TEXT,
+  starts_at TEXT,
+  ends_at TEXT,
+  coach_id INTEGER REFERENCES coaches(user_id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_bookings_session ON bookings(training_session_id, status);
 `;
 
 export function openDb(file = process.env.DB_FILE || 'data/academy.db') {

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { get, post, patch, del } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
-import { useData, useAction, Card, Stat, Table, Form, Notice, Loading, fmtDate, fmtMoney } from '../lib/ui.jsx';
+import { useData, useAction, Card, Stat, Table, Form, Notice, Loading, fmtDate, fmtTime, fmtMoney } from '../lib/ui.jsx';
+import { BookingPicker, emptyBooking, toBookingBody } from '../lib/BookingPicker.jsx';
 
 const SUB_STATUS = { active: 'Active', pending: 'Awaiting payment', expired: 'Expired', cancelled: 'Cancelled' };
 const PAY_STATUS = { paid: 'Paid', pending: 'Pending', failed: 'Failed', refunded: 'Refunded' };
+const BOOKING_STATUS = { pending: 'Awaiting confirmation', confirmed: 'Confirmed', cancelled: 'Cancelled' };
 const ATTENDANCE = { present: 'Present', absent: 'Absent', late: 'Late', excused: 'Excused' };
 
 export function StudentHome() {
@@ -80,6 +82,7 @@ export function StudentSchedule() {
           ]}
         />
       </Card>
+      <StudentBooking />
       <Card title="My timetable">
         <Table
           rows={lessons.data?.items.filter((l) => enrolled.has(l.class_id))}
@@ -93,6 +96,46 @@ export function StudentSchedule() {
         />
       </Card>
     </div>
+  );
+}
+
+// Book a public session or request a private training, and track existing bookings.
+function StudentBooking() {
+  const { run, msg, busy } = useAction();
+  const [draft, setDraft] = useState(emptyBooking);
+  const list = useData(() => get('/bookings'));
+  const body = toBookingBody(draft);
+
+  const send = async () => {
+    const res = await run(() => post('/bookings', body), 'Request sent. The academy will confirm your training.');
+    if (res) {
+      setDraft(emptyBooking);
+      list.reload();
+    }
+  };
+  const cancel = (b) => run(() => post(`/bookings/${b.id}/cancel`), 'Booking cancelled').then(list.reload);
+
+  return (
+    <>
+      <Card title="Book a training">
+        <Notice msg={msg} />
+        <BookingPicker value={draft} onChange={setDraft} />
+        <button className="btn primary" disabled={busy || !body} onClick={send}>Submit booking</button>
+      </Card>
+      <Card title="My bookings">
+        <Table
+          rows={list.data?.items}
+          columns={[
+            { key: 'type', label: 'Type', render: (r) => (r.type === 'public' ? 'Public' : 'Private') },
+            { key: 'venue', label: 'Venue' },
+            { key: 'starts_at', label: 'Time', render: (r) => (r.starts_at ? `${fmtDate(r.starts_at)}–${fmtTime(r.ends_at)}` : 'Awaiting confirmation') },
+            { key: 'status', label: 'Status', render: (r) => BOOKING_STATUS[r.status] },
+            { key: 'act', label: '', render: (r) => r.status !== 'cancelled' && <button className="btn ghost" disabled={busy} onClick={() => cancel(r)}>Cancel</button> },
+          ]}
+          empty="No bookings yet"
+        />
+      </Card>
+    </>
   );
 }
 

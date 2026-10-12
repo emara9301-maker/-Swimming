@@ -155,3 +155,65 @@ test('admin stats and audit log are available to admins only', async () => {
   const audit = await api('GET', '/admin/audit', { as: 'admin' });
   assert.ok(audit.body.items.length > 0);
 });
+
+test('public booking during sign-up is confirmed until capacity is reached', async () => {
+  const days = (n) => new Date(Date.now() + n * 864e5).toISOString();
+  const session = await api('POST', '/admin/training-sessions', {
+    as: 'admin',
+    body: { title: 'Open water', venue: 'Main pool', starts_at: days(3), ends_at: days(3.05), capacity: 1 },
+  });
+  assert.equal(session.status, 201);
+  const open = await api('GET', '/training-sessions');
+  assert.ok(open.body.items.some((s) => s.id === session.body.id));
+
+  const first = await api('POST', '/auth/register', {
+    body: { name: 'Layla', email: 'layla@test.dev', password: 'secret-pass-3', booking: { type: 'public', training_session_id: session.body.id } },
+  });
+  assert.equal(first.status, 201);
+  const second = await api('POST', '/auth/register', {
+    body: { name: 'Nour', email: 'nour@test.dev', password: 'secret-pass-4', booking: { type: 'public', training_session_id: session.body.id } },
+  });
+  assert.equal(second.status, 409);
+});
+
+test('private booking stays pending until admin confirms a time', async () => {
+  const priv = await api('POST', '/auth/register', {
+    body: {
+      name: 'Karim', email: 'karim@test.dev', password: 'secret-pass-5',
+      booking: { type: 'private', venue_address: '12 Nile St, Cairo', preferred_times: 'Sat 5-7 PM', contact_phone: '+20 100 000 0000' },
+    },
+  });
+  assert.equal(priv.status, 201);
+  tok.karim = priv.body.token;
+
+  const mine = await api('GET', '/bookings', { as: 'karim' });
+  assert.equal(mine.body.items[0].status, 'pending');
+  const pending = await api('GET', '/bookings?status=pending', { as: 'admin' });
+  const req = pending.body.items.find((b) => b.student_id === priv.body.user.id);
+  assert.ok(req, 'admin sees the pending request');
+
+  const starts = new Date(Date.now() + 5 * 864e5).toISOString();
+  const ends = new Date(Date.now() + 5 * 864e5 + 3600e3).toISOString();
+  const confirm = await api('PATCH', `/admin/bookings/${req.id}`, {
+    as: 'admin', body: { status: 'confirmed', starts_at: starts, ends_at: ends, coach_id: tok.coachUserId },
+  });
+  assert.equal(confirm.status, 200);
+  const after = await api('GET', '/bookings', { as: 'karim' });
+  assert.equal(after.body.items[0].status, 'confirmed');
+});
+
+test('a failed booking during sign-up rolls back the account', async () => {
+  const bad = await api('POST', '/auth/register', {
+    body: { name: 'Retry', email: 'retry@test.dev', password: 'secret-pass-6', booking: { type: 'private', venue_address: 'x' } },
+  });
+  assert.equal(bad.status, 400);
+  const again = await api('POST', '/auth/register', { body: { name: 'Retry', email: 'retry@test.dev', password: 'secret-pass-6' } });
+  assert.equal(again.status, 201);
+});
+
+test('students cannot manage training sessions', async () => {
+  const res = await api('POST', '/admin/training-sessions', {
+    as: 'karim', body: { title: 'x', venue: 'y', starts_at: new Date().toISOString(), ends_at: new Date(Date.now() + 1e6).toISOString(), capacity: 2 },
+  });
+  assert.equal(res.status, 403);
+});

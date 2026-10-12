@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { get, post, patch, del } from '../lib/api.js';
-import { useData, useAction, Card, Stat, Table, Form, Tabs, Notice, Loading, fmtDate, fmtMoney, toLocalInput } from '../lib/ui.jsx';
+import { useData, useAction, Card, Stat, Table, Form, Tabs, Notice, Loading, fmtDate, fmtTime, fmtMoney, toLocalInput } from '../lib/ui.jsx';
 
 const ROLE_LABELS = { student: 'Student', coach: 'Coach', admin: 'Admin' };
+const BOOKING_STATUS = { pending: 'Awaiting confirmation', confirmed: 'Confirmed', cancelled: 'Cancelled' };
 const PAY_STATUS = { paid: 'Paid', pending: 'Pending', failed: 'Failed', refunded: 'Refunded' };
 const toOptions = (items, labelKey = 'name') => (items || []).map((i) => ({ value: i.id, label: i[labelKey] }));
 
@@ -142,6 +143,7 @@ export function AdminClasses() {
           }), 'Class created').then((r) => { if (r) reload(); return !!r; })}
         />
       </Card>
+      <AdminTraining coaches={coaches.data?.items} />
       <Card title="Add lesson to timetable">
         <Form
           busy={busy}
@@ -158,6 +160,93 @@ export function AdminClasses() {
         <p className="muted">Example: {toLocalInput(new Date())}</p>
       </Card>
     </div>
+  );
+}
+
+// Confirms a private request: the admin calls the student, then sets the agreed time.
+function ConfirmBooking({ booking, coaches, run, busy, onDone }) {
+  const [v, setV] = useState({ starts_at: '', ends_at: '', coach_id: '' });
+  const set = (k) => (e) => setV((x) => ({ ...x, [k]: e.target.value }));
+  const confirm = () => run(() => patch(`/admin/bookings/${booking.id}`, {
+    status: 'confirmed',
+    starts_at: new Date(v.starts_at).toISOString(),
+    ends_at: new Date(v.ends_at).toISOString(),
+    coach_id: v.coach_id ? Number(v.coach_id) : undefined,
+  }), 'Booking confirmed and student notified').then(onDone);
+  const cancel = () => window.confirm('Cancel this booking?') && run(() => patch(`/admin/bookings/${booking.id}`, { status: 'cancelled' }), 'Booking cancelled').then(onDone);
+  return (
+    <div className="confirm-booking">
+      <input type="datetime-local" value={v.starts_at} onChange={set('starts_at')} aria-label="Start time" />
+      <input type="datetime-local" value={v.ends_at} onChange={set('ends_at')} aria-label="End time" />
+      <select value={v.coach_id} onChange={set('coach_id')} aria-label="Coach">
+        <option value="">No coach yet</option>
+        {coaches?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <button className="btn primary" disabled={busy || !v.starts_at || !v.ends_at} onClick={confirm}>Confirm</button>
+      <button className="btn danger" disabled={busy} onClick={cancel}>Cancel</button>
+    </div>
+  );
+}
+
+// Training sessions (public, with a place and time window) and booking requests.
+function AdminTraining({ coaches }) {
+  const sessions = useData(() => get('/admin/training-sessions'));
+  const bookings = useData(() => get('/bookings?limit=100'));
+  const { run, msg, busy } = useAction();
+  const reloadAll = () => { sessions.reload(); bookings.reload(); };
+  return (
+    <>
+      <Card title="Public training sessions" className="span-2">
+        <Notice msg={msg} />
+        <Table rows={sessions.data?.items} columns={[
+          { key: 'title', label: 'Session' },
+          { key: 'venue', label: 'Place' },
+          { key: 'starts_at', label: 'Starts', render: (r) => fmtDate(r.starts_at) },
+          { key: 'ends_at', label: 'Ends', render: (r) => fmtTime(r.ends_at) },
+          { key: 'booked', label: 'Booked', render: (r) => `${r.booked}/${r.capacity}` },
+          { key: 'coach_name', label: 'Coach', render: (r) => r.coach_name || '—' },
+          { key: 'active', label: 'Status', render: (r) => (
+            <button className="btn ghost" disabled={busy} onClick={() => run(() => patch(`/admin/training-sessions/${r.id}`, { active: !r.active }), 'Session updated').then(reloadAll)}>
+              {r.active ? 'Open · Close' : 'Closed · Open'}
+            </button>
+          ) },
+        ]} empty="No sessions yet" />
+      </Card>
+      <Card title="Add public session">
+        <Form
+          busy={busy}
+          fields={[
+            { name: 'title', label: 'Session name', required: true },
+            { name: 'venue', label: 'Place (pool address)', required: true },
+            { name: 'starts_at', label: 'Starts', type: 'datetime-local', required: true },
+            { name: 'ends_at', label: 'Ends', type: 'datetime-local', required: true },
+            { name: 'capacity', label: 'Capacity', type: 'number', min: 1, max: 200, required: true },
+            { name: 'coach_id', label: 'Coach', options: toOptions(coaches) },
+          ]}
+          onSubmit={(v) => run(() => post('/admin/training-sessions', {
+            title: v.title, venue: v.venue, capacity: Number(v.capacity),
+            starts_at: new Date(v.starts_at).toISOString(), ends_at: new Date(v.ends_at).toISOString(),
+            coach_id: v.coach_id ? Number(v.coach_id) : undefined,
+          }), 'Session added').then((r) => { if (r) reloadAll(); return !!r; })}
+        />
+      </Card>
+      <Card title="Booking requests" className="span-2">
+        <Table rows={bookings.data?.items} columns={[
+          { key: 'student_name', label: 'Student' },
+          { key: 'type', label: 'Type', render: (r) => (r.type === 'public' ? 'Public' : 'Private') },
+          { key: 'venue', label: 'Place', render: (r) => r.venue || '—' },
+          { key: 'preferred_times', label: 'Preferred times', render: (r) => r.preferred_times || '—' },
+          { key: 'contact_phone', label: 'Phone', render: (r) => r.contact_phone || '—' },
+          { key: 'starts_at', label: 'Scheduled', render: (r) => (r.starts_at ? `${fmtDate(r.starts_at)}–${fmtTime(r.ends_at)}` : '—') },
+          { key: 'status', label: 'Status', render: (r) => BOOKING_STATUS[r.status] },
+          { key: 'act', label: '', render: (r) => (
+            r.type === 'private' && r.status === 'pending'
+              ? <ConfirmBooking booking={r} coaches={coaches} run={run} busy={busy} onDone={reloadAll} />
+              : r.status !== 'cancelled' && <button className="btn ghost" disabled={busy} onClick={() => run(() => post(`/bookings/${r.id}/cancel`), 'Booking cancelled').then(reloadAll)}>Cancel</button>
+          ) },
+        ]} empty="No booking requests yet" />
+      </Card>
+    </>
   );
 }
 

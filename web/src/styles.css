@@ -212,3 +212,9 @@ th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
   .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .span-2 { grid-column: span 2; }
 }
+
+.booking { border: 1px solid var(--line); border-radius: 12px; padding: 0.75rem; margin: 0 0 0.75rem; }
+.booking legend { padding: 0 0.4rem; color: var(--muted); font-size: 0.9rem; }
+.booking .segmented { margin-bottom: 0.5rem; }
+.confirm-booking { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 260px; }
+.confirm-booking input, .confirm-booking select { width: auto; flex: 1 1 140px; }

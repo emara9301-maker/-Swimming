@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { hashPassword, verifyPassword, signToken, authenticate } from '../auth.js';
 import { requireString, requireDate, badRequest, HttpError, audit } from '../http.js';
 import { remainingSessions } from '../access.js';
+import { createBooking } from '../bookings.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -35,6 +36,9 @@ export default function authRoutes(db) {
     const password = requireString(req.body, 'password', { max: 200 });
     const phone = requireString(req.body, 'phone', { max: 30, optional: true });
     const birthDate = requireDate(req.body, 'birth_date', { optional: true });
+    // Optional: choose a public session or request a private training during sign-up.
+    const booking = req.body.booking ?? null;
+    if (booking !== null && (typeof booking !== 'object' || Array.isArray(booking))) throw badRequest('booking is invalid');
     if (!EMAIL_RE.test(email)) throw badRequest('Invalid email address');
     if (password.length < 8) throw badRequest('Password must be at least 8 characters');
     if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) {
@@ -49,8 +53,11 @@ export default function authRoutes(db) {
         info.lastInsertRowid,
         birthDate ? birthDate.slice(0, 10) : null
       );
-      audit(db, info.lastInsertRowid, 'register', 'user', info.lastInsertRowid);
-      return Number(info.lastInsertRowid);
+      const userId = Number(info.lastInsertRowid);
+      audit(db, userId, 'register', 'user', userId);
+      // A failed booking rolls back the whole sign-up, so the student can retry.
+      if (booking) createBooking(db, userId, booking, userId);
+      return userId;
     })();
 
     res.status(201).json({ token: signToken({ id: userId }), user: publicUser(db, userId) });
