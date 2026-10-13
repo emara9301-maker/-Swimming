@@ -156,27 +156,60 @@ test('admin stats and audit log are available to admins only', async () => {
   assert.ok(audit.body.items.length > 0);
 });
 
-test('public booking during sign-up is confirmed until capacity is reached', async () => {
+// Pays for a plan as the student and confirms the payment as admin.
+async function buyPlan(as, priceId) {
+  const buy = await api('POST', '/subscriptions', { as, body: { price_id: priceId } });
+  assert.equal(buy.status, 201);
+  const paid = await api('POST', `/payments/${buy.body.paymentId}/confirm`, { as: 'admin' });
+  assert.equal(paid.status, 200);
+}
+
+test('trainings use one session from the plan; public waits for a plan', async () => {
   const days = (n) => new Date(Date.now() + n * 864e5).toISOString();
+  const price = await api('POST', '/prices', {
+    as: 'admin', body: { name: 'Booking plan', sessions_count: 2, validity_days: 30, amount_cents: 1000 },
+  });
   const session = await api('POST', '/admin/training-sessions', {
-    as: 'admin',
-    body: { title: 'Open water', venue: 'Main pool', starts_at: days(3), ends_at: days(3.05), capacity: 1 },
+    as: 'admin', body: { title: 'Open water', venue: 'Main pool', starts_at: days(3), ends_at: days(3.05), capacity: 1 },
   });
   assert.equal(session.status, 201);
-  const open = await api('GET', '/training-sessions');
-  assert.ok(open.body.items.some((s) => s.id === session.body.id));
+  assert.ok((await api('GET', '/training-sessions')).body.items.some((s) => s.id === session.body.id));
 
-  const first = await api('POST', '/auth/register', {
+  // Sign-up without a plan: the booking waits.
+  const layla = await api('POST', '/auth/register', {
     body: { name: 'Layla', email: 'layla@test.dev', password: 'secret-pass-3', booking: { type: 'public', training_session_id: session.body.id } },
   });
-  assert.equal(first.status, 201);
-  const second = await api('POST', '/auth/register', {
+  assert.equal(layla.status, 201);
+  tok.layla = layla.body.token;
+  assert.equal((await api('GET', '/bookings', { as: 'layla' })).body.items[0].status, 'pending');
+
+  // Paying a plan confirms the waiting booking and uses one session.
+  await buyPlan('layla', price.body.id);
+  const laylaBooking = (await api('GET', '/bookings', { as: 'layla' })).body.items[0];
+  assert.equal(laylaBooking.status, 'confirmed');
+  assert.equal((await api('GET', '/subscriptions', { as: 'layla' })).body.sessions_remaining, 1);
+
+  // Cancelling gives the session back.
+  await api('POST', `/bookings/${laylaBooking.id}/cancel`, { as: 'layla' });
+  assert.equal((await api('GET', '/subscriptions', { as: 'layla' })).body.sessions_remaining, 2);
+  // Re-check the seat: Layla's cancelled seat is free again, so Nour can take it.
+  const nour = await api('POST', '/auth/register', {
     body: { name: 'Nour', email: 'nour@test.dev', password: 'secret-pass-4', booking: { type: 'public', training_session_id: session.body.id } },
   });
-  assert.equal(second.status, 409);
+  tok.nour = nour.body.token;
+  await buyPlan('nour', price.body.id);
+  assert.equal((await api('GET', '/bookings', { as: 'nour' })).body.items[0].status, 'confirmed');
+
+  // Session is now full: a third student stays pending even with a plan.
+  const third = await api('POST', '/auth/register', {
+    body: { name: 'Hana', email: 'hana@test.dev', password: 'secret-pass-7', booking: { type: 'public', training_session_id: session.body.id } },
+  });
+  tok.hana = third.body.token;
+  await buyPlan('hana', price.body.id);
+  assert.equal((await api('GET', '/bookings', { as: 'hana' })).body.items[0].status, 'pending');
 });
 
-test('private booking stays pending until admin confirms a time', async () => {
+test('private training needs a plan session when the admin confirms it', async () => {
   const priv = await api('POST', '/auth/register', {
     body: {
       name: 'Karim', email: 'karim@test.dev', password: 'secret-pass-5',
@@ -185,21 +218,22 @@ test('private booking stays pending until admin confirms a time', async () => {
   });
   assert.equal(priv.status, 201);
   tok.karim = priv.body.token;
-
-  const mine = await api('GET', '/bookings', { as: 'karim' });
-  assert.equal(mine.body.items[0].status, 'pending');
   const pending = await api('GET', '/bookings?status=pending', { as: 'admin' });
   const req = pending.body.items.find((b) => b.student_id === priv.body.user.id);
   assert.ok(req, 'admin sees the pending request');
 
   const starts = new Date(Date.now() + 5 * 864e5).toISOString();
   const ends = new Date(Date.now() + 5 * 864e5 + 3600e3).toISOString();
-  const confirm = await api('PATCH', `/admin/bookings/${req.id}`, {
-    as: 'admin', body: { status: 'confirmed', starts_at: starts, ends_at: ends, coach_id: tok.coachUserId },
-  });
-  assert.equal(confirm.status, 200);
-  const after = await api('GET', '/bookings', { as: 'karim' });
-  assert.equal(after.body.items[0].status, 'confirmed');
+  const body = { status: 'confirmed', starts_at: starts, ends_at: ends };
+  // No plan yet: confirmation is refused.
+  assert.equal((await api('PATCH', `/admin/bookings/${req.id}`, { as: 'admin', body })).status, 400);
+
+  const price = await api('GET', '/prices', { as: 'admin' });
+  await buyPlan('karim', price.body.items[0].id);
+  const before = (await api('GET', '/subscriptions', { as: 'karim' })).body.sessions_remaining;
+  assert.equal((await api('PATCH', `/admin/bookings/${req.id}`, { as: 'admin', body })).status, 200);
+  assert.equal((await api('GET', '/subscriptions', { as: 'karim' })).body.sessions_remaining, before - 1);
+  assert.equal((await api('GET', '/bookings', { as: 'karim' })).body.items[0].status, 'confirmed');
 });
 
 test('a failed booking during sign-up rolls back the account', async () => {

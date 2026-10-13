@@ -8,6 +8,27 @@ function requiredText(body, field, max) {
   return value;
 }
 
+// Every training (public or private) uses one session from the student's active plan.
+// Returns the subscription that paid for it, or null when none has sessions left.
+export function consumeSession(db, studentId) {
+  const sub = db
+    .prepare(
+      `SELECT id FROM subscriptions
+       WHERE student_id = ? AND status = 'active' AND sessions_used < sessions_total
+       ORDER BY ends_at LIMIT 1`
+    )
+    .get(studentId);
+  if (!sub) return null;
+  db.prepare('UPDATE subscriptions SET sessions_used = sessions_used + 1 WHERE id = ?').run(sub.id);
+  return sub.id;
+}
+
+export function releaseSession(db, booking) {
+  if (!booking.subscription_id) return;
+  db.prepare('UPDATE subscriptions SET sessions_used = sessions_used - 1 WHERE id = ?').run(booking.subscription_id);
+  db.prepare('UPDATE bookings SET subscription_id = NULL WHERE id = ?').run(booking.id);
+}
+
 // Creates a booking for a student. Shared by the booking endpoint and by
 // registration, so both paths apply the same rules. Call it inside a transaction.
 export function createBooking(db, studentId, body, actorId) {
@@ -17,18 +38,13 @@ export function createBooking(db, studentId, body, actorId) {
   throw badRequest('Booking type must be public or private');
 }
 
-// Public sessions are confirmed at once, as long as seats are left.
+// Public bookings are confirmed right away when the student has a session left and
+// a seat is free. Otherwise they stay pending and are confirmed after a plan is paid.
 function createPublicBooking(db, studentId, body, actorId) {
   const sessionId = requireInt(body, 'training_session_id', { min: 1 });
   const session = db.prepare('SELECT * FROM training_sessions WHERE id = ? AND active = 1').get(sessionId);
   if (!session) throw notFound('Training session');
   if (session.starts_at <= new Date().toISOString()) throw badRequest('This training session has already started');
-
-  const booked = db
-    .prepare("SELECT COUNT(*) AS n FROM bookings WHERE training_session_id = ? AND status = 'confirmed'")
-    .get(sessionId).n;
-  if (booked >= session.capacity) throw new HttpError(409, 'This training session is fully booked');
-
   const existing = db
     .prepare("SELECT 1 FROM bookings WHERE student_id = ? AND training_session_id = ? AND status != 'cancelled'")
     .get(studentId, sessionId);
@@ -37,17 +53,52 @@ function createPublicBooking(db, studentId, body, actorId) {
   const info = db
     .prepare(
       `INSERT INTO bookings (student_id, type, status, training_session_id, starts_at, ends_at, coach_id)
-       VALUES (?, 'public', 'confirmed', ?, ?, ?, ?)`
+       VALUES (?, 'public', 'pending', ?, ?, ?, ?)`
     )
     .run(studentId, sessionId, session.starts_at, session.ends_at, session.coach_id);
   const id = Number(info.lastInsertRowid);
   audit(db, actorId, 'create', 'booking', id, { type: 'public' });
-  notify(db, studentId, 'Booking confirmed', `${session.title} at ${session.venue}, ${new Date(session.starts_at).toUTCString()}`);
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!confirmPublic(db, booking, false)) {
+    notify(db, studentId, 'Booking received', `${session.title}: it will be confirmed once you have a session left in your plan`);
+  }
   return id;
 }
 
-// Private trainings stay pending until an admin has called the student and
-// confirmed a time.
+// Tries to confirm a pending public booking. Strict mode throws the reason instead of returning false.
+export function confirmPublic(db, booking, strict) {
+  const fail = (status, message) => {
+    if (strict) throw new HttpError(status, message);
+    return false;
+  };
+  const session = db.prepare('SELECT * FROM training_sessions WHERE id = ?').get(booking.training_session_id);
+  if (!session || !session.active || session.starts_at <= new Date().toISOString()) {
+    return fail(400, 'This training session is no longer available');
+  }
+  const booked = db
+    .prepare("SELECT COUNT(*) AS n FROM bookings WHERE training_session_id = ? AND status = 'confirmed'")
+    .get(session.id).n;
+  if (booked >= session.capacity) return fail(409, 'This training session is fully booked');
+
+  const subscriptionId = consumeSession(db, booking.student_id);
+  if (!subscriptionId) return fail(400, 'No sessions remaining. Renew the plan to confirm this booking');
+
+  db.prepare("UPDATE bookings SET status = 'confirmed', subscription_id = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(subscriptionId, booking.id);
+  notify(db, booking.student_id, 'Booking confirmed', `${session.title} at ${session.venue}, ${new Date(session.starts_at).toUTCString()}`);
+  return true;
+}
+
+// Called after a payment activates a plan, so waiting public bookings get their seat.
+export function confirmPendingPublic(db, studentId) {
+  const pending = db
+    .prepare("SELECT * FROM bookings WHERE student_id = ? AND type = 'public' AND status = 'pending' ORDER BY id")
+    .all(studentId);
+  for (const booking of pending) confirmPublic(db, booking, false);
+}
+
+// Private trainings stay pending until an admin has called the student and set a time.
 function createPrivateBooking(db, studentId, body, actorId) {
   const venue = requiredText(body, 'venue_address', 300);
   const preferred = requiredText(body, 'preferred_times', 500);

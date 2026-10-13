@@ -183,6 +183,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   student_id INTEGER NOT NULL REFERENCES students(user_id) ON DELETE CASCADE,
   type TEXT NOT NULL CHECK (type IN ('public','private')),
   status TEXT NOT NULL CHECK (status IN ('pending','confirmed','cancelled')),
+  subscription_id INTEGER REFERENCES subscriptions(id) ON DELETE SET NULL,
   training_session_id INTEGER REFERENCES training_sessions(id) ON DELETE SET NULL,
   venue_address TEXT,
   preferred_times TEXT,
@@ -204,6 +205,8 @@ export function openDb(file = process.env.DB_FILE || 'data/academy.db') {
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
   addTransactionHelper(db);
+  // Databases created before a column existed need it added in place.
+  ensureColumn(db, 'bookings', 'subscription_id', 'INTEGER REFERENCES subscriptions(id) ON DELETE SET NULL');
   return db;
 }
 
@@ -226,4 +229,9 @@ function addTransactionHelper(db) {
       depth -= 1;
     }
   };
+}
+
+function ensureColumn(db, table, column, definition) {
+  const exists = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }

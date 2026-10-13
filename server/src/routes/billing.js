@@ -3,6 +3,7 @@ import { requireRole } from '../auth.js';
 import { requireString, requireInt, badRequest, notFound, forbidden, HttpError, toId, paging, audit, notify } from '../http.js';
 import { expireSubscriptions, remainingSessions } from '../access.js';
 import { verifyWebhook } from '../payments.js';
+import { confirmPendingPublic } from '../bookings.js';
 
 const pad = (n) => String(n).padStart(6, '0');
 
@@ -28,6 +29,7 @@ function markPaid(db, paymentId, providerRef, actorId) {
     db.prepare("UPDATE invoices SET number = ? WHERE id = ?")
       .run(`INV-${new Date().getFullYear()}-${pad(info.lastInsertRowid)}`, info.lastInsertRowid);
     notify(db, payment.student_id, 'Payment confirmed', 'Your subscription is now active');
+    confirmPendingPublic(db, payment.student_id);
     audit(db, actorId, 'payment_paid', 'payment', paymentId, { provider_ref: providerRef });
   })();
   return db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);

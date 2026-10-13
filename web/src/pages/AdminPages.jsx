@@ -242,7 +242,14 @@ function AdminTraining({ coaches }) {
           { key: 'act', label: '', render: (r) => (
             r.type === 'private' && r.status === 'pending'
               ? <ConfirmBooking booking={r} coaches={coaches} run={run} busy={busy} onDone={reloadAll} />
-              : r.status !== 'cancelled' && <button className="btn ghost" disabled={busy} onClick={() => run(() => post(`/bookings/${r.id}/cancel`), 'Booking cancelled').then(reloadAll)}>Cancel</button>
+              : (
+                <div className="row-actions">
+                  {r.type === 'public' && r.status === 'pending' && (
+                    <button className="btn primary" disabled={busy} onClick={() => run(() => patch(`/admin/bookings/${r.id}`, { status: 'confirmed' }), 'Booking confirmed').then(reloadAll)}>Confirm</button>
+                  )}
+                  {r.status !== 'cancelled' && <button className="btn ghost" disabled={busy} onClick={() => run(() => post(`/bookings/${r.id}/cancel`), 'Booking cancelled').then(reloadAll)}>Cancel</button>}
+                </div>
+              )
           ) },
         ]} empty="No booking requests yet" />
       </Card>

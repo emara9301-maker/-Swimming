@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireRole } from '../auth.js';
 import { requireString, requireInt, requireDate, badRequest, notFound, forbidden, toId, paging, audit, notify } from '../http.js';
-import { createBooking } from '../bookings.js';
+import { createBooking, confirmPublic, consumeSession, releaseSession } from '../bookings.js';
 
 const SESSION_SELECT = `
   SELECT t.id, t.title, t.venue, t.starts_at, t.ends_at, t.capacity, t.coach_id, t.active, u.name AS coach_name,
@@ -32,6 +32,7 @@ export function publicBookingRouter(db) {
 }
 
 function cancelBooking(db, booking, actorId, tellStudent) {
+  releaseSession(db, booking);
   db.prepare("UPDATE bookings SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(booking.id);
   if (tellStudent) notify(db, booking.student_id, 'Booking cancelled', 'Your training booking was cancelled by the academy');
   audit(db, actorId, 'cancel', 'booking', booking.id);
@@ -69,7 +70,7 @@ export default function bookingRoutes(db) {
   });
 
   r.post('/bookings/:id/cancel', (req, res) => {
-    const booking = db.prepare('SELECT id, student_id, status FROM bookings WHERE id = ?').get(toId(req.params.id));
+    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(toId(req.params.id));
     if (!booking) throw notFound('Booking');
     if (req.user.role !== 'admin' && req.user.id !== booking.student_id) throw forbidden();
     if (booking.status === 'cancelled') throw badRequest('Booking is already cancelled');
@@ -122,6 +123,13 @@ export default function bookingRoutes(db) {
     if (status !== 'confirmed') throw badRequest('status must be confirmed or cancelled');
     if (booking.status === 'confirmed') throw badRequest('Booking is already confirmed');
 
+    // Public bookings already have their time from the session.
+    if (booking.type === 'public') {
+      confirmPublic(db, booking, true);
+      audit(db, req.user.id, 'confirm', 'booking', id);
+      return res.json({ ok: true });
+    }
+
     const startsAt = requireDate(req.body, 'starts_at');
     const endsAt = requireDate(req.body, 'ends_at');
     if (endsAt <= startsAt) throw badRequest('End time must be after start time');
@@ -129,9 +137,11 @@ export default function bookingRoutes(db) {
     const coachId = requireInt(req.body, 'coach_id', { min: 1, optional: true });
     if (coachId && !db.prepare('SELECT 1 FROM coaches WHERE user_id = ?').get(coachId)) throw badRequest('Coach not found');
 
+    const subscriptionId = consumeSession(db, booking.student_id);
+    if (!subscriptionId) throw badRequest('The student has no sessions remaining. Renew the plan first');
     db.prepare(
-      "UPDATE bookings SET status = 'confirmed', starts_at = ?, ends_at = ?, coach_id = ?, updated_at = datetime('now') WHERE id = ?"
-    ).run(startsAt, endsAt, coachId, id);
+      "UPDATE bookings SET status = 'confirmed', starts_at = ?, ends_at = ?, coach_id = ?, subscription_id = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(startsAt, endsAt, coachId, subscriptionId, id);
     notify(db, booking.student_id, 'Training confirmed', `Your training at ${booking.venue_address} starts ${new Date(startsAt).toUTCString()}`);
     audit(db, req.user.id, 'confirm', 'booking', id);
     res.json({ ok: true });
