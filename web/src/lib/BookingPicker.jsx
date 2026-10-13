@@ -32,8 +32,7 @@ export function toBookingBody(v) {
 }
 
 // Lets a student pick an open public session or request a private training.
-// showPhone: sign-up hides the contact phone; the schedule page keeps it.
-export function BookingPicker({ value, onChange, showPhone = true }) {
+export function BookingPicker({ value, onChange }) {
   const sessions = useData(() => get('/training-sessions'));
   const set = (k) => (e) => onChange({ ...value, [k]: e.target.value });
   const pick = (type) => onChange({ ...value, type });
@@ -77,11 +76,9 @@ export function BookingPicker({ value, onChange, showPhone = true }) {
           <Field label="Preferred days and times">
             <input value={value.preferred_times} onChange={set('preferred_times')} placeholder="e.g. Sat 5–7 PM, Mon 6 PM" required />
           </Field>
-          {showPhone && (
-            <Field label="Contact phone (optional)">
-              <input type="tel" value={value.contact_phone} onChange={set('contact_phone')} />
-            </Field>
-          )}
+          <Field label="Contact phone (optional)">
+            <input type="tel" value={value.contact_phone} onChange={set('contact_phone')} />
+          </Field>
           <Field label="Notes (optional)">
             <input value={value.notes} onChange={set('notes')} />
           </Field>
