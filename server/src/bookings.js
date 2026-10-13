@@ -47,7 +47,8 @@ export function createBooking(db, studentId, body, actorId) {
 // a seat is free. Otherwise they stay pending and are confirmed after a plan is paid.
 // Booking does not use a session; attendance does.
 function createPublicBooking(db, studentId, body, actorId) {
-  const sessionId = requireInt(body, 'training_session_id', { min: 1 });
+  const sessionId = Number(body?.training_session_id);
+  if (!Number.isInteger(sessionId) || sessionId < 1) throw badRequest('Please choose a training session');
   const session = db.prepare('SELECT * FROM training_sessions WHERE id = ? AND active = 1').get(sessionId);
   if (!session) throw notFound('Training session');
   if (session.starts_at <= new Date().toISOString()) throw badRequest('This training session has already started');

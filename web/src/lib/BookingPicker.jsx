@@ -13,14 +13,18 @@ export const emptyBooking = {
 };
 
 // Turns the form state into the API body, or null when nothing is chosen yet.
+// Returns null until the choice is complete (a public booking needs a session).
 export function toBookingBody(v) {
-  if (v.type === 'public') return { type: 'public', training_session_id: Number(v.training_session_id) || 0 };
+  if (v.type === 'public') {
+    const sessionId = Number(v.training_session_id);
+    return sessionId > 0 ? { type: 'public', training_session_id: sessionId } : null;
+  }
   if (v.type === 'private') {
     return {
       type: 'private',
       venue_address: v.venue_address,
       preferred_times: v.preferred_times,
-      contact_phone: v.contact_phone,
+      contact_phone: v.contact_phone || undefined,
       notes: v.notes || undefined,
     };
   }
@@ -28,7 +32,8 @@ export function toBookingBody(v) {
 }
 
 // Lets a student pick an open public session or request a private training.
-export function BookingPicker({ value, onChange }) {
+// showPhone: sign-up hides the contact phone; the schedule page keeps it.
+export function BookingPicker({ value, onChange, showPhone = true }) {
   const sessions = useData(() => get('/training-sessions'));
   const set = (k) => (e) => onChange({ ...value, [k]: e.target.value });
   const pick = (type) => onChange({ ...value, type });
@@ -72,9 +77,11 @@ export function BookingPicker({ value, onChange }) {
           <Field label="Preferred days and times">
             <input value={value.preferred_times} onChange={set('preferred_times')} placeholder="e.g. Sat 5–7 PM, Mon 6 PM" required />
           </Field>
-          <Field label="Contact phone (optional)">
-            <input type="tel" value={value.contact_phone} onChange={set('contact_phone')} />
-          </Field>
+          {showPhone && (
+            <Field label="Contact phone (optional)">
+              <input type="tel" value={value.contact_phone} onChange={set('contact_phone')} />
+            </Field>
+          )}
           <Field label="Notes (optional)">
             <input value={value.notes} onChange={set('notes')} />
           </Field>

@@ -267,6 +267,14 @@ test('private booking without a phone number is accepted', async () => {
   assert.equal(row.contact_phone, null);
 });
 
+test('public booking without a chosen session is rejected with a clear message', async () => {
+  const res = await api('POST', '/auth/register', {
+    body: { name: 'Empty', email: 'empty@test.dev', password: 'secret-pass-9', booking: { type: 'public', training_session_id: 0 } },
+  });
+  assert.equal(res.status, 400);
+  assert.equal(res.body.error, 'Please choose a training session');
+});
+
 test('a failed booking during sign-up rolls back the account', async () => {
   const bad = await api('POST', '/auth/register', {
     body: { name: 'Retry', email: 'retry@test.dev', password: 'secret-pass-6', booking: { type: 'private', venue_address: 'x' } },
