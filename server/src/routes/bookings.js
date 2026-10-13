@@ -11,7 +11,7 @@ const SESSION_SELECT = `
   LEFT JOIN users u ON u.id = t.coach_id`;
 
 const BOOKING_SELECT = `
-  SELECT b.id, b.student_id, s.name AS student_name, b.type, b.status, b.training_session_id,
+  SELECT b.id, b.student_id, s.name AS student_name, s.phone AS student_phone, b.type, b.status, b.training_session_id,
          t.title AS session_title, COALESCE(t.venue, b.venue_address) AS venue,
          b.venue_address, b.preferred_times, b.contact_phone, b.notes,
          b.starts_at, b.ends_at, b.coach_id, c.name AS coach_name, b.attendance, b.created_at

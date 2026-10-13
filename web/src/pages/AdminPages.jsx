@@ -237,7 +237,7 @@ function AdminTraining({ coaches }) {
           { key: 'type', label: 'Type', render: (r) => (r.type === 'public' ? 'Public' : 'Private') },
           { key: 'venue', label: 'Place', render: (r) => r.venue || '—' },
           { key: 'preferred_times', label: 'Preferred times', render: (r) => r.preferred_times || '—' },
-          { key: 'contact_phone', label: 'Phone', render: (r) => r.contact_phone || '—' },
+          { key: 'contact_phone', label: 'Phone', render: (r) => r.contact_phone || r.student_phone || '—' },
           { key: 'starts_at', label: 'Scheduled', render: (r) => (r.starts_at ? `${fmtDate(r.starts_at)}–${fmtTime(r.ends_at)}` : '—') },
           { key: 'attendance', label: 'Attendance', render: (r) => (r.status === 'confirmed' ? <TrainingAttendance booking={r} run={run} busy={busy} onDone={reloadAll} /> : '—') },
           { key: 'status', label: 'Status', render: (r) => BOOKING_STATUS[r.status] },

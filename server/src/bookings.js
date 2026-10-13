@@ -106,8 +106,9 @@ export function confirmPendingPublic(db, studentId) {
 function createPrivateBooking(db, studentId, body, actorId) {
   const venue = requiredText(body, 'venue_address', 300);
   const preferred = requiredText(body, 'preferred_times', 500);
-  const phone = requiredText(body, 'contact_phone', 30);
-  if (!PHONE_RE.test(phone)) throw badRequest('Contact phone number is invalid');
+  // Optional: a student may not have a number yet. The admin can use the phone on the student's profile.
+  const phone = requireString(body, 'contact_phone', { max: 30, optional: true });
+  if (phone && !PHONE_RE.test(phone)) throw badRequest('Contact phone number is invalid');
   const notes = requireString(body, 'notes', { max: 1000, optional: true });
 
   const info = db

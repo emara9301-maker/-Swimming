@@ -256,6 +256,17 @@ test('private training: confirm needs a session, attendance deducts', async () =
   assert.equal(await remaining('karim'), before - 1, 'attendance deducts');
 });
 
+test('private booking without a phone number is accepted', async () => {
+  const res = await api('POST', '/auth/register', {
+    body: { name: 'Samir', email: 'samir@test.dev', password: 'secret-pass-8', booking: { type: 'private', venue_address: 'Heliopolis pool', preferred_times: 'Friday evening' } },
+  });
+  assert.equal(res.status, 201);
+  const mine = await api('GET', '/bookings', { as: 'admin' });
+  const row = mine.body.items.find((b) => b.student_id === res.body.user.id);
+  assert.equal(row.status, 'pending');
+  assert.equal(row.contact_phone, null);
+});
+
 test('a failed booking during sign-up rolls back the account', async () => {
   const bad = await api('POST', '/auth/register', {
     body: { name: 'Retry', email: 'retry@test.dev', password: 'secret-pass-6', booking: { type: 'private', venue_address: 'x' } },

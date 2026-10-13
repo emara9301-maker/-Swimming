@@ -72,8 +72,8 @@ export function BookingPicker({ value, onChange }) {
           <Field label="Preferred days and times">
             <input value={value.preferred_times} onChange={set('preferred_times')} placeholder="e.g. Sat 5–7 PM, Mon 6 PM" required />
           </Field>
-          <Field label="Contact phone">
-            <input type="tel" value={value.contact_phone} onChange={set('contact_phone')} required />
+          <Field label="Contact phone (optional)">
+            <input type="tel" value={value.contact_phone} onChange={set('contact_phone')} />
           </Field>
           <Field label="Notes (optional)">
             <input value={value.notes} onChange={set('notes')} />
