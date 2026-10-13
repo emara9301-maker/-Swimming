@@ -1,4 +1,9 @@
 import { badRequest, notFound, HttpError, requireString, requireInt, audit, notify } from './http.js';
+import { remainingSessions } from './access.js';
+
+export const TRAINING_ATTENDANCE = ['present', 'absent', 'late', 'excused'];
+// Attendance that uses up one session from the plan.
+const CONSUMES = new Set(['present', 'late']);
 
 const PHONE_RE = /^\+?[0-9 ()-]{6,20}$/;
 
@@ -8,8 +13,8 @@ function requiredText(body, field, max) {
   return value;
 }
 
-// Every training (public or private) uses one session from the student's active plan.
-// Returns the subscription that paid for it, or null when none has sessions left.
+// Uses one session from the student's active plan. Returns the subscription, or null when none is left.
+// Called when the coach marks a training as attended, not when it is booked.
 export function consumeSession(db, studentId) {
   const sub = db
     .prepare(
@@ -40,6 +45,7 @@ export function createBooking(db, studentId, body, actorId) {
 
 // Public bookings are confirmed right away when the student has a session left and
 // a seat is free. Otherwise they stay pending and are confirmed after a plan is paid.
+// Booking does not use a session; attendance does.
 function createPublicBooking(db, studentId, body, actorId) {
   const sessionId = requireInt(body, 'training_session_id', { min: 1 });
   const session = db.prepare('SELECT * FROM training_sessions WHERE id = ? AND active = 1').get(sessionId);
@@ -81,11 +87,9 @@ export function confirmPublic(db, booking, strict) {
     .get(session.id).n;
   if (booked >= session.capacity) return fail(409, 'This training session is fully booked');
 
-  const subscriptionId = consumeSession(db, booking.student_id);
-  if (!subscriptionId) return fail(400, 'No sessions remaining. Renew the plan to confirm this booking');
+  if (remainingSessions(db, booking.student_id) < 1) return fail(400, 'No sessions remaining. Renew the plan to confirm this booking');
 
-  db.prepare("UPDATE bookings SET status = 'confirmed', subscription_id = ?, updated_at = datetime('now') WHERE id = ?")
-    .run(subscriptionId, booking.id);
+  db.prepare("UPDATE bookings SET status = 'confirmed', updated_at = datetime('now') WHERE id = ?").run(booking.id);
   notify(db, booking.student_id, 'Booking confirmed', `${session.title} at ${session.venue}, ${new Date(session.starts_at).toUTCString()}`);
   return true;
 }
@@ -118,4 +122,19 @@ function createPrivateBooking(db, studentId, body, actorId) {
   }
   audit(db, actorId, 'create', 'booking', id, { type: 'private' });
   return id;
+}
+
+// Records the coach's attendance for a training and keeps the plan in sync:
+// present/late uses a session, changing back to another status returns it.
+export function markTrainingAttendance(db, booking, status) {
+  let warning = false;
+  if (CONSUMES.has(status) && !booking.subscription_id) {
+    const subscriptionId = consumeSession(db, booking.student_id);
+    db.prepare('UPDATE bookings SET subscription_id = ? WHERE id = ?').run(subscriptionId, booking.id);
+    warning = !subscriptionId;
+  } else if (!CONSUMES.has(status) && booking.subscription_id) {
+    releaseSession(db, booking);
+  }
+  db.prepare("UPDATE bookings SET attendance = ?, updated_at = datetime('now') WHERE id = ?").run(status, booking.id);
+  return { warning };
 }

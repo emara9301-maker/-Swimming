@@ -43,7 +43,7 @@ export function BookingPicker({ value, onChange }) {
         <button type="button" className={seg('')} onClick={() => pick('')}>Decide later</button>
       </div>
 
-      <p className="muted">Each training uses one session from your active plan. Without a plan, the booking waits until you pay.</p>
+      <p className="muted">A session from your plan is used when your coach marks you as attended. You need a session left to book.</p>
       {value.type === 'public' && (
         sessions.error ? <Loading error={sessions.error} /> : (
           sessions.data?.items.length ? (

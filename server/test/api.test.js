@@ -163,14 +163,21 @@ async function buyPlan(as, priceId) {
   const paid = await api('POST', `/payments/${buy.body.paymentId}/confirm`, { as: 'admin' });
   assert.equal(paid.status, 200);
 }
+const remaining = async (as) => (await api('GET', '/subscriptions', { as })).body.sessions_remaining;
 
-test('trainings use one session from the plan; public waits for a plan', async () => {
+test('training attendance by the coach uses the plan; booking alone does not', async () => {
   const days = (n) => new Date(Date.now() + n * 864e5).toISOString();
+  const coach = await api('POST', '/admin/users', {
+    as: 'admin', body: { name: 'Coach Dina', email: 'dina@test.dev', password: 'coach-pass-3', role: 'coach' },
+  });
+  tok.dina = (await api('POST', '/auth/login', { body: { email: 'dina@test.dev', password: 'coach-pass-3' } })).body.token;
+  tok.dinaId = coach.body.id;
+
   const price = await api('POST', '/prices', {
     as: 'admin', body: { name: 'Booking plan', sessions_count: 2, validity_days: 30, amount_cents: 1000 },
   });
   const session = await api('POST', '/admin/training-sessions', {
-    as: 'admin', body: { title: 'Open water', venue: 'Main pool', starts_at: days(3), ends_at: days(3.05), capacity: 1 },
+    as: 'admin', body: { title: 'Open water', venue: 'Main pool', starts_at: days(3), ends_at: days(3.05), capacity: 1, coach_id: tok.dinaId },
   });
   assert.equal(session.status, 201);
   assert.ok((await api('GET', '/training-sessions')).body.items.some((s) => s.id === session.body.id));
@@ -183,16 +190,27 @@ test('trainings use one session from the plan; public waits for a plan', async (
   tok.layla = layla.body.token;
   assert.equal((await api('GET', '/bookings', { as: 'layla' })).body.items[0].status, 'pending');
 
-  // Paying a plan confirms the waiting booking and uses one session.
+  // Paying a plan confirms the booking, but nothing is deducted yet.
   await buyPlan('layla', price.body.id);
   const laylaBooking = (await api('GET', '/bookings', { as: 'layla' })).body.items[0];
   assert.equal(laylaBooking.status, 'confirmed');
-  assert.equal((await api('GET', '/subscriptions', { as: 'layla' })).body.sessions_remaining, 1);
+  assert.equal(await remaining('layla'), 2);
 
-  // Cancelling gives the session back.
+  // Coach marks attendance: present uses a session, absent gives it back.
+  const bookingUrl = `/bookings/${laylaBooking.id}/attendance`;
+  assert.equal((await api('PUT', bookingUrl, { as: 'dina', body: { status: 'present' } })).status, 200);
+  assert.equal(await remaining('layla'), 1);
+  await api('PUT', bookingUrl, { as: 'dina', body: { status: 'absent' } });
+  assert.equal(await remaining('layla'), 2);
+  await api('PUT', bookingUrl, { as: 'dina', body: { status: 'late' } });
+  assert.equal(await remaining('layla'), 1);
+
+  // Students cannot mark attendance, and cancelling returns the used session.
+  assert.equal((await api('PUT', bookingUrl, { as: 'layla', body: { status: 'present' } })).status, 403);
   await api('POST', `/bookings/${laylaBooking.id}/cancel`, { as: 'layla' });
-  assert.equal((await api('GET', '/subscriptions', { as: 'layla' })).body.sessions_remaining, 2);
-  // Re-check the seat: Layla's cancelled seat is free again, so Nour can take it.
+  assert.equal(await remaining('layla'), 2);
+
+  // The freed seat goes to the next student.
   const nour = await api('POST', '/auth/register', {
     body: { name: 'Nour', email: 'nour@test.dev', password: 'secret-pass-4', booking: { type: 'public', training_session_id: session.body.id } },
   });
@@ -200,7 +218,7 @@ test('trainings use one session from the plan; public waits for a plan', async (
   await buyPlan('nour', price.body.id);
   assert.equal((await api('GET', '/bookings', { as: 'nour' })).body.items[0].status, 'confirmed');
 
-  // Session is now full: a third student stays pending even with a plan.
+  // Seat is full: a third student stays pending even with a plan.
   const third = await api('POST', '/auth/register', {
     body: { name: 'Hana', email: 'hana@test.dev', password: 'secret-pass-7', booking: { type: 'public', training_session_id: session.body.id } },
   });
@@ -209,7 +227,7 @@ test('trainings use one session from the plan; public waits for a plan', async (
   assert.equal((await api('GET', '/bookings', { as: 'hana' })).body.items[0].status, 'pending');
 });
 
-test('private training needs a plan session when the admin confirms it', async () => {
+test('private training: confirm needs a session, attendance deducts', async () => {
   const priv = await api('POST', '/auth/register', {
     body: {
       name: 'Karim', email: 'karim@test.dev', password: 'secret-pass-5',
@@ -224,16 +242,18 @@ test('private training needs a plan session when the admin confirms it', async (
 
   const starts = new Date(Date.now() + 5 * 864e5).toISOString();
   const ends = new Date(Date.now() + 5 * 864e5 + 3600e3).toISOString();
-  const body = { status: 'confirmed', starts_at: starts, ends_at: ends };
+  const body = { status: 'confirmed', starts_at: starts, ends_at: ends, coach_id: tok.dinaId };
   // No plan yet: confirmation is refused.
   assert.equal((await api('PATCH', `/admin/bookings/${req.id}`, { as: 'admin', body })).status, 400);
 
   const price = await api('GET', '/prices', { as: 'admin' });
   await buyPlan('karim', price.body.items[0].id);
-  const before = (await api('GET', '/subscriptions', { as: 'karim' })).body.sessions_remaining;
+  const before = await remaining('karim');
   assert.equal((await api('PATCH', `/admin/bookings/${req.id}`, { as: 'admin', body })).status, 200);
-  assert.equal((await api('GET', '/subscriptions', { as: 'karim' })).body.sessions_remaining, before - 1);
-  assert.equal((await api('GET', '/bookings', { as: 'karim' })).body.items[0].status, 'confirmed');
+  assert.equal(await remaining('karim'), before, 'confirming does not deduct');
+
+  assert.equal((await api('PUT', `/bookings/${req.id}/attendance`, { as: 'dina', body: { status: 'present' } })).status, 200);
+  assert.equal(await remaining('karim'), before - 1, 'attendance deducts');
 });
 
 test('a failed booking during sign-up rolls back the account', async () => {

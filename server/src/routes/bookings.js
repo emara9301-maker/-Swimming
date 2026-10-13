@@ -1,7 +1,8 @@
 import express from 'express';
 import { requireRole } from '../auth.js';
 import { requireString, requireInt, requireDate, badRequest, notFound, forbidden, toId, paging, audit, notify } from '../http.js';
-import { createBooking, confirmPublic, consumeSession, releaseSession } from '../bookings.js';
+import { createBooking, confirmPublic, markTrainingAttendance, releaseSession, TRAINING_ATTENDANCE } from '../bookings.js';
+import { remainingSessions } from '../access.js';
 
 const SESSION_SELECT = `
   SELECT t.id, t.title, t.venue, t.starts_at, t.ends_at, t.capacity, t.coach_id, t.active, u.name AS coach_name,
@@ -13,7 +14,7 @@ const BOOKING_SELECT = `
   SELECT b.id, b.student_id, s.name AS student_name, b.type, b.status, b.training_session_id,
          t.title AS session_title, COALESCE(t.venue, b.venue_address) AS venue,
          b.venue_address, b.preferred_times, b.contact_phone, b.notes,
-         b.starts_at, b.ends_at, b.coach_id, c.name AS coach_name, b.created_at
+         b.starts_at, b.ends_at, b.coach_id, c.name AS coach_name, b.attendance, b.created_at
   FROM bookings b
   JOIN users s ON s.id = b.student_id
   LEFT JOIN training_sessions t ON t.id = b.training_session_id
@@ -49,14 +50,16 @@ export default function bookingRoutes(db) {
     res.status(201).json({ id });
   });
 
-  // Students see their own bookings; admins see all (optionally filtered by status).
+  // Students see their own bookings, coaches the trainings they lead, admins see all.
   r.get('/bookings', (req, res) => {
-    if (req.user.role !== 'student' && req.user.role !== 'admin') throw forbidden();
     const { limit, offset } = paging(req.query);
     const where = [];
     const args = [];
     if (req.user.role === 'student') {
       where.push('b.student_id = ?');
+      args.push(req.user.id);
+    } else if (req.user.role === 'coach') {
+      where.push('b.coach_id = ?');
       args.push(req.user.id);
     }
     if (req.query.status) {
@@ -76,6 +79,21 @@ export default function bookingRoutes(db) {
     if (booking.status === 'cancelled') throw badRequest('Booking is already cancelled');
     cancelBooking(db, booking, req.user.id, req.user.role === 'admin');
     res.json({ ok: true });
+  });
+
+  // The assigned coach (or an admin) records whether the student attended.
+  r.put('/bookings/:id/attendance', requireRole('admin', 'coach'), (req, res) => {
+    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(toId(req.params.id));
+    if (!booking) throw notFound('Booking');
+    if (req.user.role !== 'admin' && booking.coach_id !== req.user.id) throw forbidden();
+    if (booking.status !== 'confirmed') throw badRequest('Only confirmed trainings can be marked');
+    const status = requireString(req.body, 'status', { max: 20 });
+    if (!TRAINING_ATTENDANCE.includes(status)) throw badRequest('Invalid attendance status');
+
+    const { warning } = db.transaction(() => markTrainingAttendance(db, booking, status))();
+    audit(db, req.user.id, 'mark_attendance', 'booking', booking.id, { status });
+    if (warning) notify(db, booking.student_id, 'No sessions left', 'Please renew your plan to continue training');
+    res.json({ ok: true, students_without_sessions: warning ? [booking.student_id] : [] });
   });
 
   // Admin: list training sessions with seat counts.
@@ -137,11 +155,10 @@ export default function bookingRoutes(db) {
     const coachId = requireInt(req.body, 'coach_id', { min: 1, optional: true });
     if (coachId && !db.prepare('SELECT 1 FROM coaches WHERE user_id = ?').get(coachId)) throw badRequest('Coach not found');
 
-    const subscriptionId = consumeSession(db, booking.student_id);
-    if (!subscriptionId) throw badRequest('The student has no sessions remaining. Renew the plan first');
+    if (remainingSessions(db, booking.student_id) < 1) throw badRequest('The student has no sessions remaining. Renew the plan first');
     db.prepare(
-      "UPDATE bookings SET status = 'confirmed', starts_at = ?, ends_at = ?, coach_id = ?, subscription_id = ?, updated_at = datetime('now') WHERE id = ?"
-    ).run(startsAt, endsAt, coachId, subscriptionId, id);
+      "UPDATE bookings SET status = 'confirmed', starts_at = ?, ends_at = ?, coach_id = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(startsAt, endsAt, coachId, id);
     notify(db, booking.student_id, 'Training confirmed', `Your training at ${booking.venue_address} starts ${new Date(startsAt).toUTCString()}`);
     audit(db, req.user.id, 'confirm', 'booking', id);
     res.json({ ok: true });

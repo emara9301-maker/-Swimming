@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   type TEXT NOT NULL CHECK (type IN ('public','private')),
   status TEXT NOT NULL CHECK (status IN ('pending','confirmed','cancelled')),
   subscription_id INTEGER REFERENCES subscriptions(id) ON DELETE SET NULL,
+  attendance TEXT,
   training_session_id INTEGER REFERENCES training_sessions(id) ON DELETE SET NULL,
   venue_address TEXT,
   preferred_times TEXT,
@@ -207,6 +208,7 @@ export function openDb(file = process.env.DB_FILE || 'data/academy.db') {
   addTransactionHelper(db);
   // Databases created before a column existed need it added in place.
   ensureColumn(db, 'bookings', 'subscription_id', 'INTEGER REFERENCES subscriptions(id) ON DELETE SET NULL');
+  ensureColumn(db, 'bookings', 'attendance', 'TEXT');
   return db;
 }
 

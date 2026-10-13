@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { get, post, patch, del } from '../lib/api.js';
 import { useData, useAction, Card, Stat, Table, Form, Tabs, Notice, Loading, fmtDate, fmtTime, fmtMoney, toLocalInput } from '../lib/ui.jsx';
+import { TrainingAttendance } from '../lib/TrainingAttendance.jsx';
 
 const ROLE_LABELS = { student: 'Student', coach: 'Coach', admin: 'Admin' };
 const BOOKING_STATUS = { pending: 'Awaiting confirmation', confirmed: 'Confirmed', cancelled: 'Cancelled' };
@@ -238,6 +239,7 @@ function AdminTraining({ coaches }) {
           { key: 'preferred_times', label: 'Preferred times', render: (r) => r.preferred_times || '—' },
           { key: 'contact_phone', label: 'Phone', render: (r) => r.contact_phone || '—' },
           { key: 'starts_at', label: 'Scheduled', render: (r) => (r.starts_at ? `${fmtDate(r.starts_at)}–${fmtTime(r.ends_at)}` : '—') },
+          { key: 'attendance', label: 'Attendance', render: (r) => (r.status === 'confirmed' ? <TrainingAttendance booking={r} run={run} busy={busy} onDone={reloadAll} /> : '—') },
           { key: 'status', label: 'Status', render: (r) => BOOKING_STATUS[r.status] },
           { key: 'act', label: '', render: (r) => (
             r.type === 'private' && r.status === 'pending'

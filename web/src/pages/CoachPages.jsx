@@ -1,15 +1,40 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { get, post, put } from '../lib/api.js';
-import { useData, useAction, Card, Stat, Table, Form, Notice, Loading, fmtDate } from '../lib/ui.jsx';
+import { useData, useAction, Card, Stat, Table, Form, Notice, Loading, fmtDate, fmtTime } from '../lib/ui.jsx';
+import { TrainingAttendance } from '../lib/TrainingAttendance.jsx';
 
 const ATTENDANCE_LABELS = { present: 'Present', absent: 'Absent', late: 'Late', excused: 'Excused' };
 const SUB_STATUS = { active: 'Active', pending: 'Pending', expired: 'Expired', cancelled: 'Cancelled' };
+
+// Coach's trainings (public or private) that they lead and that are confirmed.
+function CoachTrainings() {
+  const bookings = useData(() => get('/bookings?limit=100'));
+  const { run, msg, busy } = useAction();
+  const rows = bookings.data?.items.filter((b) => b.status === 'confirmed');
+  return (
+    <Card title="My trainings">
+      <Notice msg={msg} />
+      <Table
+        rows={rows}
+        empty="No confirmed trainings"
+        columns={[
+          { key: 'starts_at', label: 'Starts', render: (r) => `${fmtDate(r.starts_at)}–${fmtTime(r.ends_at)}` },
+          { key: 'student_name', label: 'Student' },
+          { key: 'type', label: 'Type', render: (r) => (r.type === 'public' ? 'Public' : 'Private') },
+          { key: 'venue', label: 'Place' },
+          { key: 'attendance', label: 'Attendance', render: (r) => <TrainingAttendance booking={r} run={run} busy={busy} onDone={bookings.reload} /> },
+        ]}
+      />
+    </Card>
+  );
+}
 
 // Coach's own lessons (admins see all lessons).
 export function CoachSchedule() {
   const lessons = useData(() => get(`/schedule?from=${new Date(Date.now() - 2 * 864e5).toISOString()}&to=${new Date(Date.now() + 14 * 864e5).toISOString()}`));
   return (
+    <div className="grid">
     <Card title="My lessons">
       {lessons.error ? <Loading error={lessons.error} /> : (
         <Table
@@ -26,6 +51,8 @@ export function CoachSchedule() {
         />
       )}
     </Card>
+    <CoachTrainings />
+    </div>
   );
 }
 
