@@ -115,14 +115,15 @@ a { color: var(--primary); }
 .stat-label { font-size: 0.85rem; color: var(--muted); }
 
 /* Forms */
-.field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; }
+.field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; min-width: 0; }
 .field span { font-size: 0.9rem; color: var(--muted); }
 input, select, textarea {
   font: inherit; color: var(--text); background: var(--surface);
   border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.75rem;
-  min-height: 44px; width: 100%;
+  min-height: 44px; width: 100%; min-width: 0; max-width: 100%;
 }
-.form-grid { display: grid; gap: 0 0.75rem; grid-template-columns: 1fr; }
+.form-grid { display: grid; gap: 0 0.75rem; grid-template-columns: minmax(0, 1fr); }
+.form-grid > * { min-width: 0; }
 .form-submit { grid-column: 1 / -1; }
 .inline-form { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
 .inline-form.wrap { flex-wrap: wrap; }
@@ -145,7 +146,7 @@ input, select, textarea {
 .notice.error { background: var(--danger-bg); color: var(--danger); }
 
 /* Tables: scroll on desktop, stacked cards on phones */
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; max-width: 100%; }
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 th, td { text-align: start; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
 th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
@@ -195,7 +196,7 @@ th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
 /* Tablets and desktops */
 @media (min-width: 641px) {
   .hide-sm { display: none; }
-  .form-grid { grid-template-columns: repeat(2, 1fr); }
+  .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats { grid-template-columns: repeat(4, 1fr); }
   .plans { grid-template-columns: repeat(3, 1fr); }
 }
@@ -216,5 +217,5 @@ th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
 .booking { border: 1px solid var(--line); border-radius: 12px; padding: 0.75rem; margin: 0 0 0.75rem; }
 .booking legend { padding: 0 0.4rem; color: var(--muted); font-size: 0.9rem; }
 .booking .segmented { margin-bottom: 0.5rem; }
-.confirm-booking { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 260px; }
-.confirm-booking input, .confirm-booking select { width: auto; flex: 1 1 140px; }
+.confirm-booking { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 0; }
+.confirm-booking input, .confirm-booking select { width: auto; flex: 1 1 140px; min-width: 0; }
